@@ -1,3 +1,7 @@
 # Analysis of EDA data
 
-In cooperation with the Toxicology group
+The Environmental Chemistry and Toxicology group at the Vrije Universiteit Amsterdam investigates Chemicals of Emerging Concern (CECs), chemicals forming a potential health hazard for humans and other organisms, but for which only limited toxicity data is available. The number of CECs is high and ever changing, and the variety in the properties and uses of these compounds is large. It is important to characterize the presence and the exposure to these CECs to identify putative exposures and to develop universal chemical surveillance screening. To this end, the group applies effect-directed analysis (EDA), a technique that combines chemical and biological screening.
+
+In EDA a concentrated sample extract is separated, fractionated and measured with a high resolution mass spectrometer. In parallel the biological effect is measured in a bioassay, thereby identifying biologically active fractions. The chemical masses in these bioactive fractions are then subjected to chemical identification. This approach greatly reduces the chemical complexity of the sample and helps prioritize the identification of chemicals that might have an adverse effect on the environment or human health.
+
+In this project we develop algorithms and statistical criteria that allow a reliable identification of differences in bioactivity between fractions and within samples or between samples and controls in a background of correlated noise and background signals.
