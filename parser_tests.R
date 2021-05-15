@@ -3,6 +3,7 @@ folder1 <- "testdata/Antibiotics assay"
 folder2 <- "testdata/Sediment TTR"
 
 p1 <- parse_fractiomate(file.path(folder1,"20201216_FractioMate_112957_EFF1 AB.txt"))
+p1a <- parse_fractiomate(file.path(folder2,"FractioMate_Sediment.txt"))
 
 source("scripts/platereader_parser.R")
 type_single_photometric_file <- "20201217_Kralingseveer fractionated_OD600_Plate 1.txt"
