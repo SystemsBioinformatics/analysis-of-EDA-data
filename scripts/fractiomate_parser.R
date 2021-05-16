@@ -99,7 +99,7 @@ parse_fractiomate_simple <- function(lines, index) {
   colnames(timing) <- c('well_row','well_column','ready_time')
   timing <- timing %>% 
     as_tibble() %>%
-    mutate(ready_time=ms(ready_time)) %>%
+    mutate(ready_time = seconds(as.numeric(ready_time)*60)) %>%
     mutate(across(c(well_column), as.integer))
   timing$well_row <- rowletters_to_int(timing$well_row)
   return(list(meta=meta, interpreted=interpreted, timing=timing))
