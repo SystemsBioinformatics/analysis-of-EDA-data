@@ -96,7 +96,7 @@ parse_fractiomate_simple <- function(lines, index) {
   )
   timing_re <- "(\\w+);(\\d+)\\s+@\\s+(\\d+\\.\\d{2})"
   timing <- do.call(rbind, lapply(stri_match_all_regex(lines[index$timing], timing_re), "[", 2:4))
-  colnames(timing) <- c('well_row','well_column','start_time')
+  colnames(timing) <- c('well_row','well_column','ready_time')
   timing <- timing %>% 
     as_tibble() %>%
     mutate(start_time=ms(start_time)) %>%
