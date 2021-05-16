@@ -42,12 +42,11 @@ patternlist <- list(
       example = "Samplename: Sediment"
     ),
     timing = list(
-      expr = "^[Ww]ell\\s+\\w+;\\d+\\s+@\\s+\\d+\\.\\d{2}\\s+min",
+      expr = "^[Ww]ell\\s+(\\w+);(\\d+)\\s+@\\s+(\\d+\\.\\d{2})\\s+min",
       example = "Well A;3 @ 0.23 min"
     )
   )
 )
-
 
 parser_selector <- function(lines) {
   
@@ -94,7 +93,8 @@ parse_fractiomate_simple <- function(lines, index) {
   interpreted <- list('Run_start_time'= meta[['Startdate & time']] %>% 
                        fast_strptime(format="%m/%d/%Y %I:%M:%S %p")
   )
-  timing_re <- "(\\w+);(\\d+)\\s+@\\s+(\\d+\\.\\d{2})"
+  # timing_re <- "(\\w+);(\\d+)\\s+@\\s+(\\d+\\.\\d{2})"
+  timing_re <- patterns$timing$expr
   timing <- do.call(rbind, lapply(stri_match_all_regex(lines[index$timing], timing_re), "[", 2:4))
   colnames(timing) <- c('well_row','well_column','ready_time')
   timing <- timing %>% 
