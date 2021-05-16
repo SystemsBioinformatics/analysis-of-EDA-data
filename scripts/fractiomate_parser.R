@@ -11,7 +11,7 @@ rowletters_to_int <- function(x) {
   # Maximally 25*24 = 600 row names
   # single letters (24) followed by double letter codes (24*24) 
   rownames <- c(LETTERS, paste(rep(LETTERS, each=24), LETTERS, sep=""))
-  as.numeric(factor(x, levels=rownames))
+  as.integer(factor(x, levels=rownames))
 }
 
 patternlist <- list(
