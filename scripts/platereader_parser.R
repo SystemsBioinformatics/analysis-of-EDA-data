@@ -67,7 +67,7 @@ parse_platereader <- function(file) {
       example = "Iteration: <nr>"
     ),
     read = list(
-      expr = "^(\\s\\d+(\\.\\d+)?)+",
+      expr = "^(\\s\\d+(?:\\.\\d+)?)+",
       example = "<nr> <nr> <nr> ..."
     )
   )
