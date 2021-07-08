@@ -1,0 +1,2162 @@
+---
+title: "EDA: Bioassay analysis"
+author: "Imane Al Gharib"
+date: "13/6/2021"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+---
+
+      
+<style type="text/css">
+.main-container {
+  max-width: 90% !important;
+  margin-left: 8px !important;
+  margin-right: 8px !important;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning=FALSE, dev.args = list(png = list(type = "cairo")), dpi=300)
+```
+
+# Introduction
+
+Chemicals play an essential role in our everyday lives and bring many benefits to society. However, as chemicals are released during their lifecycle, they may pose a great risk for environmental and human health. To assess exposure and evaluate hazard and risk, chemicals are included in routine monitoring programs. For some potentially hazardous chemicals, however, limited environmental and toxicity data are available, resulting in being excluded from routine screening. These chemicals are known as Chemicals of Emerging Concern (CECs)(Pourchet et al., 2020). Investigating these CECs is crucial for the development of universal chemical surveillance screening.  
+Effect-directed analysis (EDA) is a powerful approach to identify CECs (Simon, Lamoree, Hamers, & de Boer, 2015). It combines biological effect-based screening with suspect and non-target chemical screening. Liquid chromatography (HPLC) is used to fractionate samples and is followed by high-resolution mass spectrometry (HRMS) to isolate and identify unknown fractions that showed an effect in the bioassay. The Environmental chemistry and toxicology group at VU Amsterdam performed a non-targeted EDA on several environmental samples, including house dust, effluent and blood serum. However, the identification of bioactive fractions in these samples is complicated by a background of correlated noise and background signals, indicating the importance and necessity of robust, statistical criteria that can reliably identify bioactive hits.  
+Although EDA is an approach that has been applied for years to identify toxicants in environmental samples, there remains a lack of consensus guidelines on how to process and analyze data obtained from such an analysis. Therefore, this research project will focus on automating the parsing and processing of EDA data post-acquisition. In addition, there seems to be a bias present in the bioassay data received from the Environmental Chemistry and Toxicology group. It is suspected that the bias was introduced by various sources of systematic errors, such as the gradient elution in HPLC or the sensors that measure bioactivity. Before the EDA data can be analyzed and statistical criteria to identify bioactive hits can be developed, effects possibly caused by these systematic errors will be visualized and their impact on data analysis will be minimized using appropriate algorithms.
+
+Import necessary libraries
+```{r Libraries}
+library(tidyverse)
+library(broom)
+library(readxl)
+library(magrittr)
+library(ggpubr)
+library(mgcv)
+library(GGally)
+library(Cairo)
+library(plotly)
+```
+  
+Load parse functions for FractioMate and Platereader data
+```{r Functions}
+source("scripts/fractiomate_parser.R")
+source("scripts/platereader_parser.R")
+```
+
+***
+***
+
+# TTR-binding assay
+  
+CECs are able to interfere in the endocrine system, which may have a harmful effect on our health. The thyroid hormone system can be affected by endocrine-disrupting chemicals through different mechanisms, including interference with the plasma hormone transport of thyroid hormones (Ouyang et al., 2017).Transthyretin (TTR) is a plasma hormone that is associated with the transport of thyroxine (T4), a thyroid hormone that is produced and released by the thyroid gland. Earlier research has shown that environmental compounds are able to compete with T4 for binding to TTR (Weiss et al., 2015). The Environmental chemistry and toxicology group developed a T4-TTR binding assay in a 96 well microplate for different evironmental samples, such as dust, effluent and serum, to identify CECs that may disrupt the binding of T4 to TTR. For each of this environmental sample, a procedure blank containing demineralized milli-Q water was taken along. There were three technical replicates for each environmental sample (Plate 1, 2 and 3).
+
+## Data parsing  
+
+### FractioMate Data  
+
+FractioMate is a fractionation machine that allows high-resolution fractionation of environmental extracts. Raw FractioMate files (.txt) can be parsed using the `fractiomate_parser` function. The function returns a list containing metadata and a dataframe with the 96-well plate positions and their fractionation times. Each plate contains 80 fractions of around 13,5 seconds from the chromatographic run of the sample. The samples are fractionated per row in a snake pattern:
+
+- A3 → A12
+- B12 → B3
+- C3 → C12  
+- [...]
+- H12 → H3
+
+The fractions are numbered in the order of fractionation and stored in column `m_fraction`.  
+
+#### Dust
+
+```{r TTR FractioMate Dust}
+
+# Location of FractioMate files
+folder <- "data/TTR-binding assay/Dust"
+
+# Procedure blank data
+file <- file.path(folder, "20201216_FractioMate_135453_PB Dust TTR.txt")
+fm_dust0 <- parse_fractiomate(file)
+fm_dust0$timing$m_sample <- "dust" # add environmental sample to data frame
+fm_dust0$timing$m_plate <- 0 # add plate number to data frame (0 means procedure blank)
+fm_dust0$timing$m_fraction <- 1:nrow(fm_dust0$timing) # add fraction number to data frame
+
+# Plate 1
+file <- file.path(folder, "20201216_FractioMate_142932_1_Dust TTR.txt")
+fm_dust1 <- parse_fractiomate(file)
+fm_dust1$timing$m_sample <- "dust"
+fm_dust1$timing$m_plate <- 1
+fm_dust1$timing$m_fraction <- 1:nrow(fm_dust1$timing)
+
+# Plate 2
+file <- file.path(folder, "20201216_FractioMate_150547_2_Dust TTR.txt")
+fm_dust2 <- parse_fractiomate(file)
+fm_dust2$timing$m_sample <- "dust"
+fm_dust2$timing$m_plate <- 2
+fm_dust2$timing$m_fraction <- 1:nrow(fm_dust2$timing)
+
+# Plate 3
+file <- file.path(folder, "20201216_FractioMate_154005_3_Dust TTR.txt")
+fm_dust3 <- parse_fractiomate(file)
+fm_dust3$timing$m_sample <- "dust"
+fm_dust3$timing$m_plate <- 3
+fm_dust3$timing$m_fraction <- 1:nrow(fm_dust3$timing)
+
+# Example
+knitr::kable(head(fm_dust0$timing))
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR FractioMate Effluent}
+
+# Location of FractioMate files
+folder <- "data/TTR-binding assay/Effluent"
+
+# Procedure blank data
+file <- file.path(folder, "20201214_FractioMate_145310_PB EFF TTR.txt")
+fm_effluent0 <- parse_fractiomate(file)
+fm_effluent0$timing$m_sample <- "effluent" # add environmental sample to data frame
+fm_effluent0$timing$m_plate <- 0 # add plate number to data frame (0 means procedure blank)
+fm_effluent0$timing$m_fraction <- 1:nrow(fm_effluent0$timing) # add fraction number to data frame
+
+# Plate 1
+file <- file.path(folder, "20201214_FractioMate_152605_1 EFF TTR.txt")
+fm_effluent1 <- parse_fractiomate(file)
+fm_effluent1$timing$m_sample <- "effluent"
+fm_effluent1$timing$m_plate <- 1
+fm_effluent1$timing$m_fraction <- 1:nrow(fm_effluent1$timing) 
+
+# Plate 2
+file <- file.path(folder, "20201214_FractioMate_160122_2 EFF TTR.txt")
+fm_effluent2 <- parse_fractiomate(file)
+fm_effluent2$timing$m_sample <- "effluent"
+fm_effluent2$timing$m_plate <- 2
+fm_effluent2$timing$m_fraction <- 1:nrow(fm_effluent2$timing) 
+
+# Plate 3
+file <- file.path(folder, "20201214_FractioMate_163507_3 EFF TTR.txt")
+fm_effluent3 <- parse_fractiomate(file)
+fm_effluent3$timing$m_sample <- "effluent"
+fm_effluent3$timing$m_plate <- 3
+fm_effluent3$timing$m_fraction <- 1:nrow(fm_effluent3$timing) 
+
+# Example
+knitr::kable(head(fm_effluent0$timing))
+```
+
+<p>&nbsp;</p>
+
+#### Serum
+
+```{r TTR FractioMate Serum}
+
+# Location of FractioMate files
+folder <- "data/TTR-binding assay/Serum"
+
+# Procedure blank data
+file <- file.path(folder, "20201215_FractioMate_140705_PB SER TTR.txt")
+fm_serum0 <- parse_fractiomate(file)
+fm_serum0$timing$m_sample <- "serum" # add environmental sample to data frame
+fm_serum0$timing$m_plate <- 0 # add plate number to data frame (0 means procedure blank)
+fm_serum0$timing$m_fraction <- 1:nrow(fm_serum0$timing) # add fraction number to data frame
+
+# Plate 1
+file <- file.path(folder, "20201215_FractioMate_144204_SER1 TTR.txt")
+fm_serum1 <- parse_fractiomate(file)
+fm_serum1$timing$m_sample <- "serum"
+fm_serum1$timing$m_plate <- 1
+fm_serum1$timing$m_fraction <- 1:nrow(fm_serum1$timing)
+
+# Plate 2
+file <- file.path(folder, "20201215_FractioMate_151542_SER2 TTR.txt")
+fm_serum2 <- parse_fractiomate(file)
+fm_serum2$timing$m_sample <- "serum"
+fm_serum2$timing$m_plate <- 2
+fm_serum2$timing$m_fraction <- 1:nrow(fm_serum2$timing)
+
+# Plate 3
+file <- file.path(folder, "20201215_FractioMate_155007_SER3 TTR.txt")
+fm_serum3 <- parse_fractiomate(file)
+fm_serum3$timing$m_sample <- "serum"
+fm_serum3$timing$m_plate <- 3
+fm_serum3$timing$m_fraction <- 1:nrow(fm_serum3$timing)
+
+# Example
+knitr::kable(head(fm_serum0$timing))
+```
+
+<p>&nbsp;</p>
+
+### Platereader Data 
+
+To measure thyroid hormone disruption, a fluorescent label, FITC, is added to T4. FITC is activated when T4 binds to TTR. However, in the presence of a competing compound, T4 is repressed from binding to TTR, which leads to a decrease in fluorescence. The 96-wells plates are measured with a spectrometer using an excitation wavelength of 487nm and an emission wavelength of 528nm. Each plate includes a calibration curve as control and 80 fractions of around 13,5 seconds from the chromatographic run of the sample. The controls are in column 1 and 2 on the plate, while the fractions are fractionated in columns 3-12. As mentioned before, the fractions are fractionated per row in a snake pattern. In total three measurements are performed in each plate:
+
+1. After reconstitution in the bioassay buffer (TRIS), which is to determine if there is any fluorescence coming from the fractions themselves.
+
+2. After addition of T4-FITC, which is used to correct for the background fluorescence.  
+
+3. After addition of TTR, which is used to measure the disruption. Measurement 2 (FITC) is subtracted from measurement 3 (TTR) to correct for background fluorescence.
+
+For each environmental sample, there are 12 measurements total. The platereader file (.xlsx) contains measurements in the following order:   
+  
+1. Procedure Blank TRIS  
+2. Plate 1 TRIS  
+3. Plate 2 TRIS  
+4. Plate 3 TRIS  
+5. Procedure Blank FITC  
+6. Plate 1 FITC  
+7. Plate 2 FITC  
+8. Plate 3 FITC  
+9. Procedure Blank TTR  
+10. Plate 1 TTR  
+11. Plate 2 TTR  
+12. Plate 3 TTR  
+  
+Here, a design file is created, which will be used for parsing the platereader data.  
+
+```{r TTR Platereader Design}
+# Set up a design file
+m_measurement <- 1:12
+m_plate <- rep(c(0:3), 3)
+m_medium <- c(rep("TRIS", 4), rep("FITC", 4), rep("TTR", 4))
+design <- data.frame(m_measurement, m_plate, m_medium)
+head(design)
+```
+
+<p>&nbsp;</p>
+
+#### Dust
+
+```{r TTR Platereader Dust}
+
+# Location of Platereader files
+folder <- "data/TTR-binding assay/Dust"
+
+# Wrangling of platereader data of dust
+file <- file.path(folder, "20201217_Dust fractions TTR.xlsx")
+p_dust <- read_excel(file) %>% # read platereader file
+  drop_na() %>% # remove rows containing missing values
+  select(m_row=1, 2:13, m_wavel=14) %>% # set rownames of first (row index) and last (wavelength) columns
+  mutate(m_measurement=rep(1:12, each=8)) %>% # add number of measurement (1-12)
+  gather(key = "m_col", value = "m_value", -c(1,14:15)) %>% # pivot data from wide to long
+  relocate(m_row, m_col) %>%
+  mutate(m_row = as.numeric(as.factor(m_row)), m_col = as.numeric(m_col),
+         m_sample="dust") %>%
+  inner_join(design) # add design data to the platereader data
+
+knitr::kable(head(p_dust))
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR Platereader Effluent}
+
+# Location of Platereader files
+folder <- "data/TTR-binding assay/Effluent"
+
+# Wrangling of platereader data of effluent
+file <- file.path(folder, "20201215 Effluent Fractions TTR.xlsx")
+p_effluent <- read_excel(file) %>% # read platereader file
+  drop_na() %>% # remove rows containing missing values
+  select(m_row=1, 2:13, m_wavel=14) %>% # set rownames of first (row index) and last (wavelength) columns
+  mutate(m_measurement=rep(1:12, each=8)) %>% # add number of measurement (1-12)
+  gather(key = "m_col", value = "m_value", -c(1,14:15)) %>% # pivot data from wide to long
+  relocate(m_row, m_col) %>%
+  mutate(m_row = as.numeric(as.factor(m_row)), m_col = as.numeric(m_col),
+         m_sample="effluent") %>%
+  inner_join(design) # add design data to the platereader data
+
+knitr::kable(head(p_effluent))
+```
+
+<p>&nbsp;</p>
+
+#### Serum
+
+```{r TTR Platereader Serum}
+
+# Location of Platereader files
+folder <- "data/TTR-binding assay/Serum"
+
+# Wrangling of platereader data of serum
+file <- file.path(folder, "20201216_Serum Fractions TTR.xlsx")
+p_serum <- read_excel(file) %>% # read platereader file
+  drop_na() %>% # remove rows containing missing values
+  select(m_row=1, 2:13, m_wavel=14) %>% # set rownames of first (row index) and last (wavelength) columns
+  mutate(m_measurement=rep(1:12, each=8)) %>% # add number of measurement (1-12)
+  gather(key = "m_col", value = "m_value", -c(1,14:15)) %>% # pivot data from wide to long
+  relocate(m_row, m_col) %>%
+  mutate(m_row = as.numeric(as.factor(m_row)), m_col = as.numeric(m_col),
+         m_sample="serum") %>%
+  inner_join(design) # add design data to the platereader data
+
+knitr::kable(head(p_serum))
+```
+
+<p>&nbsp;</p>
+
+For visualization and further analysis of the data, the FractioMate data and Platereader data of all environmental samples and plates will be combined into one single data frame.  
+
+```{r TTR Combine data}
+
+# Combine all platereader data and correct for background fluorescence (TTR - FITC)
+p_data <- rbind(p_dust, p_effluent, p_serum) %>%
+  select(-m_measurement) %>%
+  spread(key="m_medium", value="m_value") %>%
+  mutate(observed=TTR-FITC)
+
+knitr::kable(head(p_data))
+
+# Store control data in a separate data frame
+p_control <- p_data %>%
+  filter(m_col==1 | m_col==2)
+
+# Combine all FractioMate data. 'timing' contains the well positions and their fractionation times.
+fm_data <- rbind(fm_dust0$timing, fm_dust1$timing, fm_dust2$timing, fm_dust3$timing,
+                 fm_effluent0$timing, fm_effluent1$timing, fm_effluent2$timing, fm_effluent3$timing,
+                 fm_serum0$timing, fm_serum1$timing, fm_serum2$timing, fm_serum3$timing)
+
+knitr::kable(head(fm_data))
+
+
+# Add the fractionation times to the platereader data
+p_data <- p_data %>%
+  inner_join(fm_data %>%
+               # change the names of columns containg row and column numbers to match 
+               # the names of those in the platereader data frame
+               select(m_row=well_row, m_col=well_column, 3:ncol(.))) %>%
+  arrange(m_sample, m_plate, m_fraction)
+
+# Add well positions to the data
+p_data$m_well <- paste0(LETTERS[p_data$m_row], p_data$m_col)
+
+knitr::kable(head(p_data))
+```
+
+***
+
+## Visual exploration of data
+
+To get an initial understanding of the data and detect any possible biases, including a plate and time effect, the background corrected procedure blank and sample data will be visualized in heatmaps using the `platetools` package, boxplots and lineplots.  
+
+### Plate effect
+
+#### Procedure blanks
+
+```{r TTR Procedure blank plate effect, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap="**Figure 1. TTR-binding bioassay response of three procedure blanks that were taken along in the dust, effluent and serum bioassays.** The heatmaps represent a  96-well plate with rows on the y-axis and columns on the x-axis. Column 1 and 2 contained controls and are not displayed here."}
+
+# Heatmaps of the procedure blanks using background corrected values
+p <- platetools::raw_grid(p_data$observed[p_data$m_plate==0],
+                     p_data$m_well[p_data$m_plate==0],
+                     p_data$m_sample[p_data$m_plate==0], ncols = 2, plate = 96) +
+  labs(title="TTR-binding bioassay response",
+       subtitle="of procedure blanks",
+       fill="FITC-T4 bound to\nTTR (TTR - FITC)") +
+  theme_dark() +
+  theme(text = element_text(size = 17.5), plot.margin = unit(c(5,0,5,0), "mm"), plot.title = element_text(hjust = 0.5, size = 17.5), plot.subtitle = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5)) +
+  viridis::scale_fill_viridis()
+
+p
+```
+
+```{r Save figure 1, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig1.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+<p>&nbsp;</p>
+
+Figure 1 shows that there is a clear plate effect present in the procedure blank data. In all three procedure blanks, the fluorescence is highest in the first five rows of columns 3 and 4 and lowest in the bottom-right corner of the plate. The signal appears to have decreased with 40-50% in the bottom-right corner. It also seems that row F, G and H have a weak fluorescence signal in comparison with the rest of the plate. Finally, row D, which is fractionated from right to left, shows gradually increasing fluorescence.  
+
+#### Dust
+
+```{r TTR Dust plate effect, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap="**Figure 2. TTR-binding bioassay response in 80 fractions of three dust technical replicates and the procedure blank.** The heatmaps represent a  96-well plate with rows on the y-axis and columns on the x-axis. Column 1 and 2 contained controls and are not displayed here. Plate 0 is the procedure blank."}
+
+# Heatmaps of dust using background corrected values
+p <- platetools::raw_grid(p_data$observed[p_data$m_sample=="dust"],
+                     p_data$m_well[p_data$m_sample=="dust"],
+                     p_data$m_plate[p_data$m_sample=="dust"], ncols = 2, plate = 96) +
+  labs(title="TTR-binding bioassay response",
+       subtitle="of dust samples",
+       fill="FITC-T4 bound to\nTTR (TTR - FITC)") +
+  theme_dark() +
+  theme(text = element_text(size = 17.5), plot.margin = unit(c(5,0,5,0), "mm"), plot.title = element_text(hjust = 0.5, size = 17.5), plot.subtitle = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5)) +
+  viridis::scale_fill_viridis()
+
+p
+```
+
+```{r Save figure 2, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig2.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR Effluent plate effect, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap="**Figure 3. TTR-binding bioassay response in 80 fractions of three effluent technical replicates and the procedure blank.** The heatmaps represent a  96-well plate with rows on the y-axis and columns on the x-axis. Column 1 and 2 contained controls and are not displayed here. Plate 0 is the procedure blank."}
+
+# Heatmaps of effluent using background corrected values
+p <- platetools::raw_grid(p_data$observed[p_data$m_sample=="effluent"],
+                     p_data$m_well[p_data$m_sample=="effluent"],
+                     p_data$m_plate[p_data$m_sample=="effluent"], ncols = 2, plate = 96) +
+  labs(title="TTR-binding bioassay response",
+       subtitle="of effluent samples",
+       fill="FITC-T4 bound to\nTTR (TTR - FITC)") +
+  theme_dark() +
+  theme(text = element_text(size = 17.5), plot.margin = unit(c(5,0,5,0), "mm"), plot.title = element_text(hjust = 0.5, size = 17.5), plot.subtitle = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5)) +
+  viridis::scale_fill_viridis()
+
+p
+```
+
+```{r Save figure 3, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig3.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+<p>&nbsp;</p>
+
+#### Serum
+
+```{r TTR Serum plate effect, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap="**Figure 4. TTR-binding bioassay response in 80 fractions of three serum technical replicates and the procedure blank.** The heatmaps represent a  96-well plate with rows on the y-axis and columns on the x-axis. Column 1 and 2 contained controls and are not displayed here. Plate 0 is the procedure blank."}
+
+# Heatmaps of serum using background corrected values
+p <- platetools::raw_grid(p_data$observed[p_data$m_sample=="serum"],
+                     p_data$m_well[p_data$m_sample=="serum"],
+                     p_data$m_plate[p_data$m_sample=="serum"], ncols = 2, plate = 96) +
+  labs(title="TTR-binding bioassay response",
+       subtitle="of serum samples",
+       fill="FITC-T4 bound to\nTTR (TTR - FITC)") +
+  theme_dark() +
+  theme(text = element_text(size = 17.5), plot.margin = unit(c(5,0,5,0), "mm"), plot.title = element_text(hjust = 0.5, size = 17.5), plot.subtitle = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5)) +
+  viridis::scale_fill_viridis()
+
+p
+```
+
+```{r Save figure 4, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig4.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+<p>&nbsp;</p>
+
+The plate effect is also present in all three plates of all three environmental samples. However, the gradual increase of fluorescence that is present in row D in the procedure blanks is not visible in any of the dust samples. This suggests that the effect might be introduced by the microplate reader.
+
+The plate effect can also be visualized by plotting the row and column effects separately.  
+
+```{r TTR Row and column boxplots, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap="**Figure 5. TTR-binding bioassay response in 80 fractions of the procedure blanks per row and column.** A. Overall row effect on the median of the fluorescence signal. B. Overall column effect on the median of the fluorescence signal. Box plots represent IQR with the dark line representing the median. Whiskers represent 1.5*IQR and outliers are any values exceeding that. The row (A) and column (B) indices are depicted on the x-axis and the background-corrected fluorescence signal on the y-axis"}
+
+# Boxplots of row effects
+p1 <- ggplot(p_data[p_data$m_plate==0,], aes(x=as.factor(LETTERS[m_row]), y=observed)) +
+  geom_boxplot(fill=viridis::viridis(2)[2]) +
+  labs(title = "Row effect", 
+       y="FITC-T4 bound to TTR\n(TTR - FITC)", 
+       x="Row index") +
+  ylim(30000,70000) +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5), legend.text = element_text(size = 12.5)) +
+  facet_wrap(~m_sample, ncol=3)
+
+# Boxplots of column effects
+p2 <- ggplot(p_data[p_data$m_plate==0,], aes(x=as.factor(m_col), y=observed)) +
+  geom_boxplot(fill=viridis::viridis(2)[2]) +
+  labs(title = "Column effect", 
+       y="FITC-T4 bound to TTR\n(TTR - FITC)", 
+       x="Column index") +
+  ylim(30000,70000) +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5), legend.text = element_text(size = 12.5)) +
+  facet_wrap(~m_sample, ncol=3)
+
+
+p <- annotate_figure(ggarrange(p1, p2, nrow=2, labels=c("A", "B"))) #top = text_grob("TTR-binding bioassay response\n of procedure blank", face = "bold", size = 14)
+p
+``` 
+
+```{r Save figure 5, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig5.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+  
+The boxplots in figure 5, show a clear plate effect in all three procedure blanks. As was seen in the heatmaps above, there is a stronger fluorescence signal in row D and a weaker one in rows F, G and H. In addition, the fluorescence seems to decrease per column. The signal is stronger in columns 3 and 4, which is most likely caused by the high fluorescence in rows A-E (Fig. 1), and seems to decrease gradually after that.  
+  
+### Time effect
+
+```{r TTR Time effect, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap="**Figure 6. TTR-binding bioassay chromatograms of dust, effluent and serum.** The retention time in minutes is displayed on the x-axis and the background-corrected fluorescence signal on the y-axis. Plate 0 is the procedure blank."}
+
+# Convert time to minutes
+p_data <- p_data %>% 
+  mutate(start_time = as.numeric(as.duration(start_time)),
+         ready_time = as.numeric(as.duration(ready_time))) %>%
+  mutate(time = ((start_time + ready_time)/2)/60) # Take the center of start_time and ready_time
+
+# Lineplots of each plate for each environmental sample
+p <- p_data %>%
+  mutate(m_plate = as.factor(m_plate)) %>%
+  ggplot(aes(x=time, y=observed, col=m_plate)) + 
+  geom_point() +
+  geom_line() +
+  labs(y="FITC-T4 bound to TTR\n(% of control)", 
+       x="Retention time (min)", 
+       title="TTR-binding bioassay response",
+       col="Plate") +
+  ylim(0,65000) +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), legend.title = element_text(hjust = 0.5, size = 12.5), legend.text = element_text(size = 12.5)) +
+  scale_colour_viridis_d() +
+  facet_wrap(~m_sample, ncol=3)
+
+
+p
+```
+
+```{r Save figure 6, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig6.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+In figure 6, the bioassay response is plotted against the retention time. All three procedure blanks show a trend a over time.
+
+To minimize the plate and time effects, a generalized additive model (GAM) with smooth functions for both plate effect and time effect will be created using all three procedure blanks. 
+
+***
+  
+## Generlized Additive Model
+
+A generalized additive model, or GAM, captures relationships between predictor and dependent variables in smooth functions. To predict the dependent variable, the smooth functions are estimated and then added up. Here, a GAM will be built using smooth functions for both plate and time effect. Thin plate splines are used to model these smooth functions. Here, fraction numbers are used as the time variable because the fractions numbered in the order of fractionation. The GAM structure can be described as: $$E(fluorescence) = s(row, column) + s(fraction)$$
+Fluorescence is the observed fluorescence signal after correcting for the background signal (TTR - FITC), E(fluorescence) is the predicted value and the terms s(row, column) and s(time) denote the smooth functions. 
+
+The wiggliness of the fit depends on the smoothing parameter and on the number of basis functions `k` that make up a smooth function. The smoothing parameters are selected by *restricted maximum likelihood (REML)*. `k` should not be too low because that prevents the model from being sufficiently wiggly. If `k` is high, the automatic selection of the smoothing parameter will prevent it from being too wiggly. However, `k` cannot be too high because that could result in a model with more parameters than data and one that is too slow to fit. Thus, `k` should be chosen to be large enough so that there will be enough degrees of freedom, but small enough to deter increased computational cost. To find the optimal `k`, it must be increased until a stable fit is found. Therefore, a model is fitted with k=8 for both the plate effect smooth function and time effect smooth function and then continuously refitted with a different `k` until it is adequate. What might be of help in choosing `k` is to inspect the Basis dimension (k) checking results. This reports the `k-index` estimate, which must not be far below 0, and a `p-value`, which must also not be low, because a low `p-value` may indicate that `k` is too small, especially if the number of `k` is close to the reported *effective degrees of freedom (edf)*.
+In addition to the `k-index` and `p-value`, correlations between plates for each environmental sample are checked. Correlations between plates after subtracting fitted procedure blank values should not decrease significantly in comparison to when raw procedure blank values are subtracted. Finally, the autocorrelation between residuals will be checked to ascertain that the model is not overfitted. 
+
+<p>&nbsp;</p>
+
+### GAM
+
+```{r TTR GAM}
+
+set.seed(455)
+# Fit a thin plate spline at k=13 for the row and column spline and 
+# k=9 for the time spline
+fits <- lapply(split(p_data[p_data$m_plate==0,], # Split procedure blank data by samples
+                         p_data[p_data$m_plate==0,]$m_sample),
+                   FUN=function(sample_slice){ 
+                     gam(observed ~ s(m_row, m_col, k=13) + s(m_fraction, k=9), data=sample_slice, method="REML")
+                   })
+
+# Check the significance of your smooth terms
+# Dust
+summary(fits$dust) 
+k.check(fits$dust)
+
+# Effluent
+summary(fits$effluent) 
+k.check(fits$effluent)
+
+# Serum
+summary(fits$serum) 
+k.check(fits$serum)
+
+# Create data frame with values of the predictor variables
+# This will be used to make predictions
+row.range <- as.numeric(c(min(p_data$m_row), max(p_data$m_row)))  
+col.range <- as.numeric(c(min(p_data$m_col), max(p_data$m_col)))
+
+nd <- expand.grid(list(m_row = seq(from = row.range[1], to = row.range[2], by = 1), 
+                       m_col = seq(from = col.range[1], to = col.range[2], by = 1)), 
+                  KEEP.OUT.ATTRS = FALSE)
+
+# Add fraction/time variable
+nd <- nd %>%
+  inner_join(p_data %>%
+               filter(m_plate==0, m_sample=="dust") %>%
+               select(m_row, m_col, m_fraction)) %>%
+  arrange(m_fraction)
+
+# Make predictions
+predictions <- lapply(fits, FUN=function(fit){ 
+  predict(fit, newdata=nd, se=TRUE)
+})
+
+# Add the predictions to the data frame with prediction variables
+nd <- cbind(nd, dust=predictions$dust$fit, effluent=predictions$effluent$fit, serum=predictions$serum$fit)
+knitr::kable(head(nd))
+```
+
+<p>&nbsp;</p>
+
+The `summary` function produces summaries of the results of the model fitting. The first part of the summary describes the model that is fitted. "Family" means that a Gaussian or normal distribution of the errors is assumed. The "Link" of "identity" tells us that the model doesn't transform the predictions. In the next section, the parametric terms of the model are described. Parametric in this context refers to linear terms. However,  no linear terms were added to the model, hence, only the intercept is mentioned in this section. The next section covers the smooth terms. For smooths coefficients are not printed because each smooth function has multiple coefficients, one for each `k`.  However, the effective degrees of freedom (edf) are returned. The edf value represents the complexity of the smooth. An edf of 1 is equivalent to a straight line. An edf of 2 is equivalent to a quadratic curve, and so on, with higher edfs describing more wiggly curves. The p-value explains the overall significance of the smooth. 
+
+The `k.check` function checks whether the basis dimensions are adequate, For each procedure blank, the `k-index` is close to 1 for both smooth functions and the p-value is not significantly low, which suggests that a model with k=13 for the plate effect and k=9 for the time effect might be appropriate.  
+
+### Model assessment: residuals
+
+To assess the appropriateness of the model, the residuals will be examined. The difference between the observed value of the dependent variable *fluorescence* and the predicted value *E(fluorescence)* is called the residual. Each data point has one residual. The residuals will be plotted against the predicted values and the independent variables. In addition, the residuals will be plotted in a histogram to assess normality and determine a Standard deviation.  
+
+```{r GAM residuals check, fig.width=11.2, fig.height=4.02*4, fig.fullwidth=TRUE, fig.cap=c("**Figure 7. Residual plots of model E(fluorescence) = s(row, column, k=13) + s(fraction, k=9).** A. Observed values plotted against the fitted values for each procedure blank. The fitted values are displayed on the x-axis and the observed values on the y-axis. B. Residuals plotted against fitted values for each procedure blank. The fitted values are displayed on the x-axis and the residuals on the y-axis. C. Q-Q plots of the residuals for each procedure blank. The theoretical quantiles are plotted on the x-axis and the sample quantiles on the y-axis. D. The distribution of residuals. The residuals are displayed on the x-axis and the frequency and density on the right and left y-axis, respectively. SD is the standard deviation.")}
+
+# Add fractiomate and platereader data (p_data) to the fitted values
+nd <- nd %>%
+  gather(key="m_sample", value="fitted", -c(m_row, m_col, m_fraction)) %>%
+  inner_join(p_data %>%
+               filter(m_plate==0) %>%
+               select(m_row, m_col, m_sample, observed, time)) %>%
+  mutate(residuals=observed-fitted)
+
+# Plot observed values against the fitted values. 
+p1 <- nd %>%
+  ggplot(aes(x=fitted, y=observed)) +
+  geom_point() +
+  labs(title="Observed vs. fitted values",
+       subtitle = "E(fluorescence) = s(row, column, k=13) + s(fraction, k=9)",
+       x = "Fitted value",
+       y = "Observed") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), 
+        plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5)) +
+  facet_wrap(~ m_sample, ncol=3) 
+
+
+# Residuals are plotted against the predicted values. 
+p2 <- nd %>%
+  ggplot(aes(x=fitted, y=residuals)) +
+  geom_point() +
+  geom_hline(yintercept=0, linetype="dashed", color = "red") +
+  labs(title="Residuals vs. fitted values",
+       subtitle = "E(fluorescence) = s(row, column, k=13) + s(fraction, k=9)",
+       x = "Fitted value",
+       y = "Residuals") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), 
+        plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5)) +
+  facet_wrap(~ m_sample, ncol=3) 
+
+# Q-Q plots of residuals
+p3 <- ggplot(nd, aes(sample = residuals)) +
+  stat_qq() + 
+  stat_qq_line() +
+  facet_wrap(~ m_sample) +
+  labs(title=" Q-Q Plots",
+       subtitle = "E(fluorescence) = s(row, column, k=13) + s(fraction, k=9)",
+       x="Theoretical Quantiles",
+       y="Sample Quantiles") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.25,0.25,0.25,0.25), "cm"), 
+        plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5))
+
+# Histogram (frequency) of residuals 
+p4 <- lapply(split(nd,nd$m_sample),
+            FUN=function(sample_slice){ 
+              # The code here is the plot code generation. You can do anything you would 
+              # normally do for a single plot, such as calling stat_function, and you do this 
+              # one slice at a time.
+              ybreaks = seq(0,13,1)
+              bw=300
+              n_obs = sum(!is.na(sample_slice$residuals))
+              p <- ggplot(sample_slice, aes(residuals)) +
+                geom_histogram(aes(y=..density..), binwidth = bw) + 
+                stat_function(fun=dnorm, 
+                              args=list(mean=mean(sample_slice$residuals), 
+                                        sd=sd(sample_slice$residuals)),
+                              color="red", size=0.75) +
+                xlab(paste0("Residuals\n", "(SD=", format(sd(sample_slice$residuals), nsmall=2), ")")) +
+                labs(title=str_to_title(unique(sample_slice$m_sample))) +
+                theme_bw() +
+                theme(text = element_text(size = 12.5), plot.margin = unit(c(0.25,0.25,0.25,0.25), "cm"), 
+                      plot.title = element_text(hjust = 0.5, size = 12.5))
+              
+              ## Add secondary axis
+              if (sample_slice$m_sample=="dust"){
+                p <- p +
+                  scale_y_continuous("Density", sec.axis = sec_axis(
+                    trans = ~ . * bw * n_obs, name = " ", breaks = ybreaks))
+                } else if (sample_slice$m_sample=="serum"){
+                p <- p +
+                  scale_y_continuous(" ", sec.axis = sec_axis(
+                    trans = ~ . * bw * n_obs, name = "Frequency", breaks = ybreaks))
+                } else {
+                p <- p +
+                  scale_y_continuous(" ", sec.axis = sec_axis(
+                    trans = ~ . * bw * n_obs, name = " ", breaks = ybreaks))
+                }
+              })
+
+plot_title <- expression(atop(bold("Residuals distributions"), 
+                              scriptstyle("E(fluorescence) = s(row, column, k=13) + s(fraction, k=9)")))
+p4 <- ggarrange(p4[[1]], p4[[2]], p4[[3]], ncol=3)
+p4 <- annotate_figure(p4, top = text_grob(plot_title , size = 15))
+
+p <- annotate_figure(ggarrange(p1, p2, p3, p4, nrow=4, labels=c("A", "B", "C", "D")), 
+                     top = text_grob("Residuals plots", size = 17.5, hjust=0.325, face="bold"))
+
+p
+```
+
+```{r Save figure 7, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig7A.png",
+  plot = p1,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+
+ggsave(
+  "figures/rmarkdown/fig7B.png",
+  plot = p2,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+
+ggsave(
+  "figures/rmarkdown/fig7C.png",
+  plot = p3,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+
+ggsave(
+  "figures/rmarkdown/fig7D.png",
+  plot = p4,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+Looking at the residuals plots, the model's predicted values seem strongly correlated with the observed values (Fig. 7A), which suggests that our model is accurate. Furthermore, the residuals seem evenly dispersed around 0 for the most part(Fig. 7B). At larger fitted values, the residuals tend to be more positive. In addition, there are a few outliers present, e.g. in serum at x=55000. The Q-Q plots and the distributions of the residuals do not give a strong indication of non-normality (Fig. 7C, D). However, effluent seems to have slightly shorter left tail , while serum has a longer left tail due to the outlier.   
+
+The residuals will also be plotted against the individual predictor variables (plate and time) to see if there might be a pattern present.  
+
+```{r TTR GAM residuals vs. predictors 1, fig.width=2.5, fig.height=2.5, fig.cap=c("**Figure 8. Residuals versus the predictor variables row and column of model E(fluorescence) = s(row, column, k=13) + s(fraction, k=9).** Residuals plotted against row and column indices. The x-axis represents the row positions, the y-axis represents the column positions and the z-axis the residuals. To view the residuals of a single environmental sample, disable the other samples by pressing on the sample names in the legend.")}
+
+# Residuals vs. row and columns.
+p <- plotly::plot_ly(data=nd, x=~LETTERS[m_row], y=~m_col, color=~m_sample, colors=viridis::viridis(3)) %>%
+  plotly::add_trace(type="scatter3d", mode="markers", z=~residuals, marker=list(size=6)) %>% #, color=viridis::viridis(1)
+  plotly::layout(scene = list(xaxis = list(title = "Row", titlefont = list(size = 14, color = "black"), showticklabels = TRUE, tickangle = 45, tickfont = list(size = 12, color = "black")),
+                      yaxis = list(title = "Column", titlefont = list(size = 14, color = "black"), showticklabels = TRUE, tickangle = 45, tickfont = list(size = 12, color = "black")),
+                      zaxis = list(title = "Residuals", titlefont = list(size = 14, color = "black"), showticklabels = TRUE, tickangle = 45, tickfont = list(size = 12, color = "black"))),
+                 legend = list(x = 0.9, y = 0.9, title=list(text='<b> Environmental\n sample</b>')),
+                 xaxis = list(fixedrange = TRUE), yaxis = list(fixedrange = TRUE))
+
+p
+```
+
+```{r TTR GAM residuals vs. predictors 2, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 9. Residuals versus the predictor variable fractions (or time) of model E(fluorescence) = s(row, column, k=13) + s(fraction, k=9).** Residuals plotted against fractions. The x-axis represents fractions (or time) and the y-axis represents residuals.")}
+
+# Plot the residuals against the predictor variables.
+# Residuals vs. time/fractions.
+p <- nd %>%
+  ggplot(aes(x=m_fraction, y=residuals)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept=0, linetype="dashed", color = "grey") +
+  labs(title="Residuals vs. fractions",
+     subtitle = "E(fluorescence) = s(row, column, k=13) + s(fraction, k=9)",
+     x = "Fraction",
+     y = "Residuals") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5)) +
+  facet_wrap(~ m_sample, ncol=3)
+
+p
+```
+
+```{r Save figure 9, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig9.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+Similar to the residual plots, figure 8 and 9 show that the residuals are dispersed around 0, with a outlier present at position A4 and Fraction 2 in serum. The residuals deviate less from the null line at later fractions and rows than at earlier fractions and rows, where the range between the lower and higher residuals is larger.  
+
+### Autocorrelation: residuals
+
+To further evaluate the model, the assumption of no autocorrelation in the residuals is checked. Autocorrelation means that a value is correlated with a previous value, which is not expected for the residuals because they should follow a random pattern. When autocorrelation is detected in the residuals from the model, it suggests that the model is misspecified. A cause could be that there is some information left over that was not accounted for in the model.
+The partial autocorrelation function measures the correlation between a value and a previous value while removing the correlation of the intervening observations.  
+
+```{r TTR Autocorrelation residuals , fig.width=11.2*(2/3), fig.height=4.02*3, fig.fullwidth=TRUE, fig.cap=c("**Figure 10. (Partial) Autocorrelation function of residuals of dust, effluent and serum.** A. Autocorrelation and partial autocorrelation in residuals of dust. B. Autocorrelation and partial autocorrelation in residuals of effluent. C. Autocorrelation and partial autocorrelation in residuals of serum. The x-axis displays the lag between the residuals and the y-axis the value of the autocorrelation function (acf). The blue dashed line is the 95% confidence interval (CI). The autocorrelation with lag zero always equals 1, because this represents the autocorrelation between each residual and itself. ")}
+
+# DUST
+# Residuals autocorrelation and partial correlation
+autocor <- acf(x=nd$residuals[nd$m_sample=="dust"], lag.max=20, plot = FALSE)
+pautocor <- pacf(x=nd$residuals[nd$m_sample=="dust"], lag.max=20, plot = FALSE)
+
+# Combine the autocorrelation coefficients of all plates into one data frame
+data <- rbind(tibble(Lag=autocor$lag, value=autocor$acf, Function="ACF"),
+              tibble(Lag=pautocor$lag, value=pautocor$acf, Function="Partial ACF")) %>%
+  group_by(Function) %>%
+  mutate(CI = qnorm((1 + 0.95)/2)/sqrt(80)) %>% # calculate 95% confidence interval
+  ungroup
+
+# Plot the autocorrelations and partial autocorrelations of dust residuals
+p1 <- ggplot(data, aes(x=Lag, y=value)) +
+  geom_bar(stat="identity", width=.05) +
+  geom_hline(yintercept = 0) +
+  geom_hline(aes(yintercept = -CI), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept = CI), color="blue", linetype="dashed") +
+  labs(x="Lag", y="",
+       title="Dust") +  
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5)) +
+  facet_wrap(~Function, scales="fixed")
+
+
+# EFFLUENT
+# Residuals autocorrelation and partial correlation
+autocor <- acf(x=nd$residuals[nd$m_sample=="effluent"], lag.max=20, plot = FALSE)
+pautocor <- pacf(x=nd$residuals[nd$m_sample=="effluent"], lag.max=20, plot = FALSE)
+
+# Combine the autocorrelation coefficients of all plates into one data frame
+data <- rbind(tibble(Lag=autocor$lag, value=autocor$acf, Function="ACF"),
+              tibble(Lag=pautocor$lag, value=pautocor$acf, Function="Partial ACF")) %>%
+  group_by(Function) %>%
+  mutate(CI = qnorm((1 + 0.95)/2)/sqrt(80)) %>%
+  ungroup
+
+# Plot the autocorrelations and partial autocorrelations of effluent residuals
+p2 <- ggplot(data, aes(x=Lag, y=value)) +
+  geom_bar(stat="identity", width=.05) +
+  geom_hline(yintercept = 0) +
+  geom_hline(aes(yintercept = -CI), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept = CI), color="blue", linetype="dashed") +
+  labs(x="Lag", y="",
+       title="Effluent") +  
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5)) +
+  facet_wrap(~Function, scales="fixed")
+
+
+# SERUM
+# Residuals autocorrelation and partial correlation
+autocor <- acf(x=nd$residuals[nd$m_sample=="serum"], lag.max=20, plot = FALSE)
+pautocor <- pacf(x=nd$residuals[nd$m_sample=="serum"], lag.max=20, plot = FALSE)
+
+# Combine the autocorrelation coefficients of all plates into one data frame
+data <- rbind(tibble(Lag=autocor$lag, value=autocor$acf, Function="ACF"),
+              tibble(Lag=pautocor$lag, value=pautocor$acf, Function="Partial ACF")) %>%
+  group_by(Function) %>%
+  mutate(CI = qnorm((1 + 0.95)/2)/sqrt(80)) %>%
+  ungroup
+
+# Plot the autocorrelations and partial autocorrelations of effluent residuals
+p3 <- ggplot(data, aes(x=Lag, y=value)) +
+  geom_bar(stat="identity", width=.05) +
+  geom_hline(yintercept = 0) +
+  geom_hline(aes(yintercept = -CI), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept = CI), color="blue", linetype="dashed") +
+  labs(x="Lag", y="",
+       title="Serum") +  
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5)) +
+  facet_wrap(~Function, scales="fixed")
+
+p <- annotate_figure(ggarrange(p1, p2, p3, nrow=3, labels=c("A", "B", "C")), 
+                     top = text_grob("Autocorrelation of residuals", size = 17.5, hjust=0.425, face="bold"))
+
+p
+```
+
+```{r Save figure 10, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig10A.png.png",
+  plot = p1, 
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*(2/3),
+  height=4.02
+)
+
+ggsave(
+  "figures/rmarkdown/fig10B.png.png",
+  plot = p2, 
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*(2/3),
+  height=4.02
+)
+
+ggsave(
+  "figures/rmarkdown/fig10C.png.png",
+  plot = p3, 
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*(2/3),
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+The autocorrelation coefficient is significant at lag 7, 11 and 14 in dust (Fig. 10A), at lag 13 and 14 in effluent (Fig. 10B), and at lag 7, 9, 14 and 20 in serum (Fig. 10C). However, the majority of the autocorrelations fall within the 95% confidence interval, so we can assume that the residuals follow a random pattern. This also applies to the partial autocorrelation function.  
+
+### Raw procedure blank versus fitted
+
+```{r TTR Raw and fitted vs. time, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 11. The raw procedure blanks versus the fitted procedure blanks of each environmental sample.** The x-axis represents the fractions (or time) and the y-axis the fluorescence signal. The fitted line is depicted in dark purple and the raw line in yellow. ")}
+
+# Fitted PB and Raw PB vs. time
+p <- nd %>%
+  gather(key="line", value="value", observed, fitted) %>% # gather observed and fitted columns into one
+  mutate(line=case_when(.$line=="observed" ~ "Raw PB",
+                              TRUE ~ "Fitted PB")) %>%
+  ggplot(aes(x=m_fraction, y=value, col=line)) +
+  geom_point() +
+  geom_line() +
+  xlab("Fraction") +
+  ylab("FITC-T4 bound\nto TTR") +
+  labs(title="Procedure blank", 
+       subtitle="Raw vs. fitted",
+       col="") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(0.5,0.5,0.5,0.5), "cm"), 
+        plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(hjust = 0.5),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  facet_wrap(~ m_sample, ncol=3) +
+  scale_color_viridis_d()
+
+p 
+```
+
+```{r Save figure 11, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig11.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+Figure 11 depicts the raw procedure blank signal versus the fitted procedure blank signal over time for all three environmental samples. The model produces a less wiggly procedure blank line.  
+
+### Single smooth effects
+
+To determine the effect of each smooth function, they are plotted individually. The smooth term effects can be extracted from the `plot.gam` function.  
+
+#### Dust
+
+```{r TTR GAM smooth effects Dust, fig.width=11.2*1.25, fig.height=4.02*1.25, fig.fullwidth=TRUE, fig.cap=c("**Figure 12. Single smooth effects of dust.** A. Plate effect. B. Time effect.")}
+
+## DUST
+# Calculate effects of each smooth term
+effects <- plot.gam(fits$dust, n=80, n2=64, select = 0)
+
+# Extract values of the first smooth term (plate effect) and store them in a data frame
+plate_effect <- matrix(effects[[1]]$fit, nrow=64)
+colnames(plate_effect) <- effects[[1]]$y # add column names, which are the column indices. 
+plate_effect <- as_tibble(plate_effect) # convert matrix to a tibble/data frame 
+plate_effect$m_row <- effects[[1]]$x # add row indices to a seperate column m_row
+plate_effect <- plate_effect %>% # gather the data into long form for easier plotting. 
+  gather("m_col", "value", -m_row) %>%
+  mutate(m_col=as.numeric(m_col), value=as.numeric(value)) %>%
+  filter(m_row %% 1 == 0, m_col %% 1 == 0) %>% # keep only whole column and row indices
+  mutate(m_well = paste0(LETTERS[m_row], m_col))
+
+# Plot the plate effect
+p1 <- platetools::raw_map(plate_effect$value, plate_effect$m_well, plate=96) +
+  labs(title = "Plate effect",
+       fill= effects[[1]]$main) +
+  theme_dark() +
+  theme(text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 15),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  viridis::scale_fill_viridis(breaks=c(-12500,0,12500), limits=c(-16000,16000))
+
+# Extract values of the second smooth term (time effect) and store them in a data frame
+time_effect <- tibble(m_fraction=effects[[2]]$x, value=effects[[2]]$fit, 
+                      min_se=effects[[2]]$fit-effects[[2]]$se, plus_se=effects[[2]]$fit+effects[[2]]$se) %>%
+  inner_join(p_data %>%
+               select(m_fraction, m_well)) %>%
+  distinct()
+
+# Plot the time effect
+p2 <- platetools::raw_map(time_effect$value, time_effect$m_well, plate=96) +
+  labs(title = "Time effect",
+       fill= effects[[2]]$ylab) +
+  theme_dark() +
+  theme(text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 15),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  viridis::scale_fill_viridis(breaks=c(-12500,0,12500), limits=c(-16000,16000))
+
+
+p <- annotate_figure(ggarrange(p1, p2, ncol=2, labels = c("A","B")), 
+                     top = text_grob("Dust", size = 17.5, hjust=0.325, face="bold"))
+
+p
+``` 
+
+```{r Save figure 12, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig11.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.25,
+  height=4.02*1.25
+)
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR GAM smooth effects Effluent, fig.width=11.2*1.25, fig.height=4.02*1.25, fig.fullwidth=TRUE, fig.cap=c("**Figure 13. Single smooth effects of effluent.** A. Plate effect. B. Time effect.")}
+
+## EFFLUENT
+# Calculate effects of each smooth term
+effects <- plot.gam(fits$effluent, n=80, n2=64, select = 0) 
+
+# Extract values of the first smooth term (plate effect) and store them in a data frame
+plate_effect <- matrix(effects[[1]]$fit, nrow=64)
+colnames(plate_effect) <- effects[[1]]$y
+plate_effect <- as_tibble(plate_effect)
+plate_effect$m_row <- effects[[1]]$x
+plate_effect <- plate_effect %>%
+  gather("m_col", "value", -m_row) %>%
+  mutate(m_col=as.numeric(m_col), value=as.numeric(value)) %>%
+  filter(m_row %% 1 == 0, m_col %% 1 == 0) %>%
+  mutate(m_well = paste0(LETTERS[m_row], m_col))
+
+# Plot the plate effect
+p1 <- platetools::raw_map(plate_effect$value, plate_effect$m_well, plate=96) +
+  labs(title = "Plate effect",
+       fill= effects[[1]]$main) +
+  theme_dark() +
+  theme(text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 15),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  viridis::scale_fill_viridis(breaks=c(-12500,0,12500), limits=c(-16000,16000))
+
+# Extract values of the second smooth term (time effect) and store them in a data frame
+time_effect <- tibble(m_fraction=effects[[2]]$x, value=effects[[2]]$fit, 
+                      min_se=effects[[2]]$fit-effects[[2]]$se, plus_se=effects[[2]]$fit+effects[[2]]$se) %>%
+  inner_join(p_data %>%
+               select(m_fraction, m_well)) %>%
+  distinct()
+
+# Plot the time effect
+p2 <- platetools::raw_map(time_effect$value, time_effect$m_well, plate=96) +
+  labs(title = "Time effect",
+       fill= effects[[2]]$ylab) +
+  theme_dark() +
+  theme(text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 15),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  viridis::scale_fill_viridis(breaks=c(-12500,0,12500), limits=c(-16000,16000))
+
+
+p <- annotate_figure(ggarrange(p1, p2, ncol=2), 
+                     top = text_grob("Effluent", size = 17.5, hjust=0.325, face="bold"))
+
+p
+```
+
+```{r Save figure 13, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig13.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.25,
+  height=4.02*1.25
+)
+```
+
+<p>&nbsp;</p>
+
+#### Serum
+
+```{r TTR GAM smooth effects Serum, fig.width=11.2*1.25, fig.height=4.02*1.25, fig.fullwidth=TRUE, fig.cap=c("**Figure 14. Single smooth effects of serum.** A. Plate effect. B. Time effect.")}
+## SERUM
+# Calculate effects of each smooth term
+effects <- plot.gam(fits$serum, n=80, n2=64, select = 0) 
+
+# Extract values of the first smooth term (plate effect) and store them in a data frame
+plate_effect <- matrix(effects[[1]]$fit, nrow=64)
+colnames(plate_effect) <- effects[[1]]$y
+plate_effect <- as_tibble(plate_effect)
+plate_effect$m_row <- effects[[1]]$x
+plate_effect <- plate_effect %>%
+  gather("m_col", "value", -m_row) %>%
+  mutate(m_col=as.numeric(m_col), value=as.numeric(value)) %>%
+  filter(m_row %% 1 == 0, m_col %% 1 == 0) %>%
+  mutate(m_well = paste0(LETTERS[m_row], m_col))
+
+# Plot the plate effect
+p1 <- platetools::raw_map(plate_effect$value, plate_effect$m_well, plate=96) +
+  labs(title = "Plate effect",
+       fill= effects[[1]]$main) +
+  theme_dark() +
+  theme(text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 15),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  viridis::scale_fill_viridis(breaks=c(-12500,0,12500), limits=c(-16000,16000))
+
+# Extract values of the second smooth term (time effect) and store them in a data frame
+time_effect <- tibble(m_fraction=effects[[2]]$x, value=effects[[2]]$fit, 
+                      min_se=effects[[2]]$fit-effects[[2]]$se, plus_se=effects[[2]]$fit+effects[[2]]$se) %>%
+  inner_join(p_data %>%
+               select(m_fraction, m_well)) %>%
+  distinct()
+
+# Plot the time effect
+p2 <- platetools::raw_map(time_effect$value, time_effect$m_well, plate=96) +
+  labs(title = "Time effect",
+       fill= effects[[2]]$ylab) +
+  theme_dark() +
+  theme(text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 15),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  viridis::scale_fill_viridis(breaks=c(-12500,0,12500), limits=c(-16000,16000))
+
+
+p <- annotate_figure(ggarrange(p1, p2, ncol=2), 
+                     top = text_grob("Serum", size = 17.5, hjust=0.325, face="bold"))
+
+p
+```
+
+```{r Save figure 14, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig13.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.25,
+  height=4.02*1.25
+)
+```
+
+<p>&nbsp;</p>
+
+From figure 12A, 13A and 14A, we can assume the fluorescence signal is associated with the location on the plate. It seems that the upper right corner of the plate has a positive effect on the fluorescence signal, i.e. an increased fluorescence signal. However, the effect decreases considerably in the bottom right corner. This suggests that as you go further right and down on the plate, the fluorescence signal will decrease. The gradual increase in fluorescence in row D seems to be explained by the time smooth term (Fig. 12B, 13B and 14B).
+
+***
+
+## Blank correction
+
+To assess the magnitude of the fluorescence signal and identify bioactive peaks, the chromatograms of the procedure blanks are subtracted from the analytical signals of each sample and plate. Here, the raw and fitted background signals are removed from the analytical signal and subsequently compared with each other.  
+
+#### Dust
+
+```{r TTR Blank subtraction Dust, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 15. Chromatograms of each technical replicate of dust after subtracting the procedure blank.** The x-axis represents fractions (or time) and the y-axis the procedure blank corrected fluorescence signal. The analytical signal after subtracting the fitted procedure blank is displayed in purple and the analytical signal after subtracting the raw procedure blank in yellow.")}
+
+# Add all fractiomate and platereader data (p_data) to fitted data
+nd2 <- nd %>%
+  # Assign new names to observed procedure blank values and their time
+  select(1:5, raw=6, raw.time=7, 8) %>% 
+  inner_join(p_data %>%
+               filter(m_plate != 0) %>%
+               select(m_row, m_col, m_well, m_fraction, m_plate, m_sample, observed, time)) %>%
+  # Subtract observed data from fitted and raw procedure blank values to detect peaks
+  mutate(fitted_sample=fitted-observed, 
+         raw_sample=raw-observed, m_plate=as.numeric(m_plate))
+
+## DUST
+# Plot sample values after blank subtraction
+p <- nd2 %>%
+  filter(m_sample=="dust") %>%
+  gather(key="line", value="value", fitted_sample, raw_sample) %>%
+  mutate(line=case_when(.$line=="fitted_sample" ~ "Fitted PB - Sample",
+                              TRUE ~ "Raw PB - Sample")) %>%
+  ggplot(aes(x=m_fraction, y=value, col=line)) +
+    geom_point() +
+    geom_line() + 
+    xlab("Fraction") +
+    ylab("FITC-T4 bound to TTR\n(after blank subtraction)") +
+    labs(title="TTR binding assay response", 
+         subtitle = "in dust",
+         col="", 
+         linetype="") +
+    theme_bw() +
+    theme(text = element_text(size = 12.5), plot.margin = unit(c(5,0,5,0), "mm"), 
+          plot.title = element_text(hjust = 0.5, size = 15, margin=unit(c(0,0,0,0), "mm")), 
+          plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 12.5),
+          legend.position = "bottom", legend.direction = "horizontal") +
+    facet_wrap(~ as.factor(m_plate), ncol=3) +
+    viridis::scale_color_viridis(discrete = TRUE, option = "D")
+
+p
+```
+
+```{r Save figure 15, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig15.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR Blank subtraction Effluent, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 16. Chromatograms of each technical replicate of effluent after subtracting the procedure blank.** The x-axis represents fractions (or time) and the y-axis the procedure blank corrected fluorescence signal. The analytical signal after subtracting the fitted procedure blank is displayed in purple and after subtracting the raw procedure blank is displayed in yellow.")}
+
+## EFFLUENT
+# Plot sample values after blank subtraction
+p <- nd2 %>%
+  filter(m_sample=="effluent") %>%
+  gather(key="line", value="value", fitted_sample, raw_sample) %>%
+  mutate(line=case_when(.$line=="fitted_sample" ~ "Fitted PB - Sample",
+                              TRUE ~ "Raw PB - Sample")) %>%
+  ggplot(aes(x=m_fraction, y=value, col=line)) +
+    geom_point() +
+    geom_line() + 
+    xlab("Fraction") +
+    ylab("FITC-T4 bound to TTR\n(after blank subtraction)") +
+    labs(title="TTR binding assay response", 
+         subtitle = "in effluent",
+         col="", 
+         linetype="") +
+    theme_bw() +
+    theme(text = element_text(size = 12.5), plot.margin = unit(c(5,0,5,0), "mm"), 
+          plot.title = element_text(hjust = 0.5, size = 15, margin=unit(c(0,0,0,0), "mm")), 
+          plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 12.5),
+          legend.position = "bottom", legend.direction = "horizontal") +
+    facet_wrap(~ as.factor(m_plate), ncol=3) +
+    viridis::scale_color_viridis(discrete = TRUE, option = "D")
+
+p
+```
+
+```{r Save figure 16, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig16.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+#### Serum
+
+```{r TTR Blank subtraction Serum, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 17. Chromatograms of each technical replicate of serum after subtracting the procedure blank.** The x-axis represents fractions (or time) and the y-axis the procedure blank corrected fluorescence signal. The analytical signal after subtracting the fitted procedure blank is displayed in purple and the analytical signal after subtracting the raw procedure blank in yellow.")}
+
+## SERUM
+# Plot sample values after blank subtraction
+p <- nd2 %>%
+  filter(m_sample=="serum") %>%
+  gather(key="line", value="value", fitted_sample, raw_sample) %>%
+  mutate(line=case_when(.$line=="fitted_sample" ~ "Fitted PB - Sample",
+                              TRUE ~ "Raw PB - Sample")) %>%
+  ggplot(aes(x=m_fraction, y=value, col=line)) +
+    geom_point() +
+    geom_line() + 
+    xlab("Fraction") +
+    ylab("FITC-T4 bound to TTR\n(after blank subtraction)") +
+    labs(title="TTR binding assay response", 
+         subtitle = "in serum",
+         col="", 
+         linetype="") +
+    theme_bw() +
+    theme(text = element_text(size = 12.5), plot.margin = unit(c(5,0,5,0), "mm"), 
+          plot.title = element_text(hjust = 0.5, size = 15, margin=unit(c(0,0,0,0), "mm")), 
+          plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 12.5),
+          legend.position = "bottom", legend.direction = "horizontal") +
+    facet_wrap(~ as.factor(m_plate), ncol=3) +
+    viridis::scale_color_viridis(discrete = TRUE, option = "D")
+
+p
+```
+
+```{r Save figure 17, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig17.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+Comparing the signals after subtracting the raw blank and after subtracting the fitted blank reveals that the magnitude of of fluorescence of certain fractions disappear when subtracting the fitted values, such as fraction 3 of effluent (Fig. 16) and fraction 2 of serum (Fig. 17). In addition, some signals do not seem reproducible, e.g. the signal in Plate 1 of serum at fraction 78. This signal does not seem present in Plate 2 and 3. The fluorescence signal of Plate 2 and 3 are also similar to each other, while the signal of Plate 1 is more distinct. Finally, there is a shift visible between the plates. It seems as if the chromatogram is lower than 0 in Plate 1, around 0 in Plate 2 and above 0 in Plate 3 (Fig. 15-17).  
+
+## Chromatogram shift correction
+
+To correct for shift, one plate will be taken as reference. The difference between this plate and other plates will be calculated for each fraction. The mean of this difference will then be subtracted from all plates to attain corrected graphs. Plate 2 will be used as reference.  
+
+```{r TTR Shift correction}
+
+shifted_data <- nd2 %>%
+  gather(key="line", value="value", fitted_sample, raw_sample) %>%
+  mutate(line=case_when(.$line=="fitted_sample" ~ "Fitted PB - Sample",
+                              TRUE ~ "Raw PB - Sample")) %>% 
+  select(-c("fitted", "m_well", "raw", "raw.time", "residuals", "observed", "time")) %>%
+  arrange(line, m_sample, m_plate, m_fraction) %>%
+  group_by(line, m_sample) %>%
+  mutate(ref=rep(value[m_plate==2],3)) %>%
+  ungroup() %>%
+  mutate(shift=value-ref, m_plate=as.numeric(m_plate)) %>%
+  group_by(line, m_sample, m_plate) %>%
+  mutate(mean_shift=mean(shift)) %>%
+  ungroup() %>%
+  mutate(corrected.value=value-mean_shift) %>%
+  inner_join(nd2 %>%
+               gather(key="line", value="value", fitted_sample, raw_sample) %>%
+               mutate(line=case_when(.$line=="fitted_sample" ~ "Fitted PB - Sample",
+                              TRUE ~ "Raw PB - Sample")) %>%
+               select(m_row, m_col, m_fraction, line, m_plate, m_sample, time, fitted, raw, raw.time))
+
+```
+
+### Deviations from fraction mean
+
+The deviation of each fraction from the fraction mean is calculated and subsequently, plotted in a histogram to evaluate the distribution and assess whether it is similar to the distribution of the residuals.  
+
+```{r TTR Deviations, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 18. The distribution of the deviations from the fraction mean.** The deviations are displayed on the x-axis and the frequency and density on the right and left y-axis, respectively. SD is the standard deviation.")}
+
+shifted_data <- shifted_data %>%
+  group_by(m_sample, m_fraction) %>%
+  mutate(mean.fraction=mean(corrected.value)) %>%
+  ungroup() %>%
+  mutate(deviations=corrected.value-mean.fraction)
+
+# Histogram (frequency) of deviations 
+p <- lapply(split(shifted_data,shifted_data$m_sample),
+            FUN=function(sample_slice){ 
+              # The code here is the plot code generation. You can do anything you would 
+              # normally do for a single plot, such as calling stat_function, ashifted_data1 you do this 
+              # one slice at a time.
+              ybreaks = seq(0,40,5)
+              bw=300
+              n_obs = sum(!is.na(sample_slice$deviations))
+              p <- ggplot(sample_slice, aes(deviations)) +
+                geom_histogram(aes(y=..density..), binwidth = bw) + 
+                stat_function(fun=dnorm, 
+                              args=list(mean=mean(sample_slice$deviations), 
+                                        sd=sd(sample_slice$deviations)),
+                              color="red", size=0.75) +
+                xlab(paste0("Deviations\n", "(SD=", format(sd(sample_slice$deviations), nsmall=2), ")")) +
+                labs(title=str_to_title(unique(sample_slice$m_sample))) +
+                theme_bw() +
+                theme(text = element_text(size = 12.5), plot.margin = unit(c(0.25,0.25,0.25,0.25), "cm"), 
+                      plot.title = element_text(hjust = 0.5, size = 12.5))
+              
+              ## Add secoshifted_data1ary axis
+              if (sample_slice$m_sample=="dust"){
+                p <- p +
+                  scale_y_continuous("Density", sec.axis = sec_axis(
+                    trans = ~ . * bw * n_obs, name = " ", breaks = ybreaks))
+                } else if (sample_slice$m_sample=="serum"){
+                p <- p +
+                  scale_y_continuous(" ", sec.axis = sec_axis(
+                    trans = ~ . * bw * n_obs, name = "Frequency", breaks = ybreaks))
+                } else {
+                p <- p +
+                  scale_y_continuous(" ", sec.axis = sec_axis(
+                    trans = ~ . * bw * n_obs, name = " ", breaks = ybreaks))
+                }
+              })
+
+plot_title <- expression(atop(bold("Deviations distributions"), 
+                              scriptstyle("E(fluorescence) = s(row, column, k=13) + s(fraction, k=9)")))
+p <- ggarrange(p[[1]], p[[2]], p[[3]], ncol=3)
+p <- annotate_figure(p, top = text_grob(plot_title , size = 15))
+
+p
+```
+
+```{r Save figure 18, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig18.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+The deviations are normally distributed for all environmental samples (Fig. 18). The standard deviations of dust and serum are similar to the standard deviations of the residuals of dust and serum (Fig. 7D). The standard deviation of effluent is much lower than that of the residuals.
+
+***
+
+## Correlation technical replicates
+
+The correlations between the plates are inspected to further assess whether the model is appropriate. The correlations between the plates after removing the raw background is compared to the correlations of the technical replicates after removing the fitted background.  
+
+#### Dust
+
+```{r TTR Dust raw correlation, fig.width=11.2*1.125, fig.height=11.2*1.125, fig.fullwidth=TRUE, fig.cap=c("**Figure 19. Correlation matrix of the technical replicates of dust after subtracting the raw procedure blank.**")}
+## DUST
+# Correlation between plates after subtracting raw procedure blanks
+data <- shifted_data %>%
+  filter(m_sample=="dust", line=="Raw PB - Sample") %>%
+  select(m_fraction, m_plate, corrected.value) %>%
+  spread(key=m_plate, value=corrected.value) %>%
+  column_to_rownames("m_fraction")
+
+# Plot correlation matrix
+p <- ggpairs(data, title="Dust: Correlation between plates",
+             ylab="FITC-T4 bound to TTR\n(after blank subtraction)",
+             xlab="FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(subtitle="after subtracting raw procedure blank values") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+        text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 15))
+
+p
+```
+
+```{r Save figure 19, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig19.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.125,
+  height=11.2*1.125
+)
+```
+
+```{r TTR Dust fitted correlation, fig.width=11.2*1.125, fig.height=11.2*1.125, fig.fullwidth=TRUE, fig.cap=c("**Figure 20. Correlation matrix of the technical replicates of dust after subtracting the fitted procedure blank.**")}
+# Correlation between plates after subtracting fitted procedure blanks
+data <- shifted_data %>%
+  filter(m_sample=="dust", line=="Fitted PB - Sample") %>%
+  select(m_fraction, m_plate, corrected.value) %>%
+  spread(key=m_plate, value=corrected.value) %>%
+  column_to_rownames("m_fraction")
+
+p <- ggpairs(data, title="Dust: Correlation between plates",
+             ylab="FITC-T4 bound to TTR\n(after blank subtraction)",
+             xlab="FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(subtitle="after subtracting fitted procedure blank values") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+        text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 15))
+
+p
+```
+
+```{r Save figure 20, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig20.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.125,
+  height=11.2*1.125
+)
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR Effluent raw correlation, fig.width=11.2*1.125, fig.height=11.2*1.125, fig.fullwidth=TRUE, fig.cap=c("**Figure 21. Correlation matrix of the technical replicates of effluent after subtracting the raw procedure blank.**")}
+## EFFLUENT
+# Correlation between plates after subtracting raw procedure blanks
+data <- shifted_data %>%
+  filter(m_sample=="effluent", line=="Raw PB - Sample") %>%
+  select(m_fraction, m_plate, corrected.value) %>%
+  spread(key=m_plate, value=corrected.value) %>%
+  column_to_rownames("m_fraction")
+
+p <- ggpairs(data, title="Effluent: Correlation between plates",
+             ylab="FITC-T4 bound to TTR\n(after blank subtraction)",
+             xlab="FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(subtitle="after subtracting raw procedure blank values") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+        text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 15))
+
+p
+```
+
+```{r Save figure 21, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig21.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.125,
+  height=11.2*1.125
+)
+```
+
+```{r TTR Effluent fitted correlation, fig.width=11.2*1.125, fig.height=11.2*1.125, fig.fullwidth=TRUE, fig.cap=c("**Figure 22. Correlation matrix of the technical replicates of effluent after subtracting the fitted procedure blank.**")}
+# Correlation between plates after subtracting fitted procedure blanks
+data <- shifted_data %>%
+  filter(m_sample=="effluent", line=="Fitted PB - Sample") %>%
+  select(m_fraction, m_plate, corrected.value) %>%
+  spread(key=m_plate, value=corrected.value) %>%
+  column_to_rownames("m_fraction")
+
+p <- ggpairs(data, title="Effluent: Correlation between plates",
+             ylab="FITC-T4 bound to TTR\n(after blank subtraction)",
+             xlab="FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(subtitle="after subtracting fitted procedure blank values") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+        text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 15))
+p
+```
+
+```{r Save figure 22, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig22.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.125,
+  height=11.2*1.125
+)
+```
+
+<p>&nbsp;</p>
+
+#### Serum
+
+```{r TTR Serum raw correlation, fig.width=11.2*1.125, fig.height=11.2*1.125, fig.fullwidth=TRUE, fig.cap=c("**Figure 23. Correlation matrix of the technical replicates of serum after subtracting the raw procedure blank.**")}
+## SERUM
+# Correlation between plates after subtracting raw procedure blanks
+data <- shifted_data %>%
+  filter(m_sample=="serum", line=="Raw PB - Sample") %>%
+  select(m_fraction, m_plate, corrected.value) %>%
+  spread(key=m_plate, value=corrected.value) %>%
+  column_to_rownames("m_fraction")
+
+p <- ggpairs(data, title="Serum: Correlation between plates",
+             ylab="FITC-T4 bound to TTR\n(after blank subtraction)",
+             xlab="FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(subtitle="after subtracting raw procedure blank values") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+        text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 15))
+p
+```
+
+```{r Save figure 23, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig23.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.125,
+  height=11.2*1.125
+)
+```
+
+```{r TTR Serum fitted correlation, fig.width=11.2*1.125, fig.height=11.2*1.125, fig.fullwidth=TRUE, fig.cap=c("**Figure 24. Correlation matrix of the technical replicates of serum after subtracting the fitted procedure blank.**")}
+# Correlation between plates after subtracting fitted procedure blanks
+data <- shifted_data %>%
+  filter(m_sample=="serum", line=="Fitted PB - Sample") %>%
+  select(m_fraction, m_plate, corrected.value) %>%
+  spread(key=m_plate, value=corrected.value) %>%
+  column_to_rownames("m_fraction")
+
+p <- ggpairs(data, title="Serum: Correlation between plates",
+             ylab="FITC-T4 bound to TTR\n(after blank subtraction)",
+             xlab="FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(subtitle="after subtracting fitted procedure blank values") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+        text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+        plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 15))
+p
+```
+
+```{r Save figure 24, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig24.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2*1.125,
+  height=11.2*1.125
+)
+```
+
+<p>&nbsp;</p>
+
+For each environmental sample, a correlation matrix was produced for both the raw and fitted procedure blank corrected signal (Fig. 19-24). The corrrelations between the raw and fitted corrected fluorescence signals do not differ considerably. Furthermore, the correlation between Plates 2 and 3 is larger than the correlations between Plate 1 and 2 and Plate 1 and 3, especially for serum and effluent. This suggests that the model with k=13 for the plate term and k=9 for the time term is appropriate and that it removes the majority of the plate and time effect. For future reseach, it would be preferable to fractionate sample extracts randomly over the 96-well plate to get a better understanding of the plate effect. Currently, the samples are fractionated in a snake pattern, which means the plate and time effect are linked with each other. However, the FractioMate machine is only able to fractionate in a snake pattern over rows or over columns. 
+
+***
+
+## Autocorrelation of corrected fluorescence signal
+
+#### Dust
+
+```{r TTR Autocorrelation fit dust, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap=c("**Figure 25. (Partial) Autocorrelation function of shift and blank corrected fluorescence signals of each technical replicate of dust.** The x-axis displays the lag between the residuals and the y-axis the value of the autocorrelation function (acf). The blue dashed line is the 95% confidence interval (CI). The autocorrelation with lag zero always equals 1, because this represents the autocorrelation between each residual and itself. ")}
+
+## DUST
+
+# Fit autocorrelation
+# Plate 1
+autocor1 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="dust" & shifted_data$m_plate==1], lag.max=20, plot = FALSE) # autocorrelation function of plate 1
+pautocor1 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="dust" & shifted_data$m_plate==1], lag.max=20, plot = FALSE) # partial autocorrelation function of plate 1
+
+# Plate 2
+autocor2 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="dust" & shifted_data$m_plate==2], lag.max=20, plot = FALSE) # autocorrelation function of plate 2
+pautocor2 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="dust" & shifted_data$m_plate==2], lag.max=20, plot = FALSE) #  partial autocorrelation function of plate 2
+
+# Plate 3
+autocor3 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="dust" & shifted_data$m_plate==3], lag.max=20, plot = FALSE) # autocorrelation function of plate 3
+pautocor3 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="dust" & shifted_data$m_plate==3], lag.max=20, plot = FALSE) # partial autocorrelation function of plate 3
+
+
+# Combine the autocorrelation coefficients of all plates into one data frame 
+data <- rbind(tibble(Lag=autocor1$lag, value=autocor1$acf, Function="ACF", m_plate=1),
+              tibble(Lag=pautocor1$lag, value=pautocor1$acf, Function="Partial ACF", m_plate=1),
+              tibble(Lag=autocor2$lag, value=autocor2$acf, Function="ACF", m_plate=2),
+              tibble(Lag=pautocor2$lag, value=pautocor2$acf, Function="Partial ACF", m_plate=2),
+              tibble(Lag=autocor3$lag, value=autocor3$acf, Function="ACF", m_plate=3),
+              tibble(Lag=pautocor3$lag, value=pautocor3$acf, Function="Partial ACF", m_plate=3)) %>%
+  group_by(m_plate, Function) %>%
+  mutate(CI = qnorm((1 + 0.95)/2)/sqrt(80)) %>% # calculate 95% confidence interval per plate
+  ungroup
+
+# Plot the autocorrelation and partial autocorrelations of each plate 
+p <- ggplot(data, aes(x=Lag, y=value)) +
+  geom_bar(stat="identity", width=.1) +
+  geom_hline(yintercept = 0) +
+  geom_hline(aes(yintercept = -CI), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept = CI), color="blue", linetype="dashed") +
+  labs(x="Lag", y="",
+       title="Autocorrelation of shift and blank corrected samples",
+       subtitle="dust") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+      text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+      plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+      plot.subtitle = element_text(hjust = 0.5, size = 15)) +
+  facet_wrap(~Function + m_plate, scales="fixed")
+
+p
+```
+
+```{r Save figure 25, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig25.png.png",
+  plot = p, 
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+<p>&nbsp;</p>
+
+#### Effluent
+
+```{r TTR Autocorrelation fit effluent, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap=c("**Figure 26. (Partial) Autocorrelation function of shift and blank corrected fluorescence signals of each technical replicate of effluent.** The x-axis displays the lag between the residuals and the y-axis the value of the autocorrelation function (acf). The blue dashed line is the 95% confidence interval (CI). The autocorrelation with lag zero always equals 1, because this represents the autocorrelation between each residual and itself. ")}
+
+## EFFLUENT
+
+# Fit autocorrelation
+# Plate 1
+autocor1 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="effluent" & shifted_data$m_plate==1], lag.max=20, plot = FALSE) # autocorrelation function of plate 1
+pautocor1 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="effluent" & shifted_data$m_plate==1], lag.max=20, plot = FALSE) # partial autocorrelation function of plate 1
+
+# Plate 2
+autocor2 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="effluent" & shifted_data$m_plate==2], lag.max=20, plot = FALSE) # autocorrelation function of plate 2
+pautocor2 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="effluent" & shifted_data$m_plate==2], lag.max=20, plot = FALSE) #  partial autocorrelation function of plate 2
+
+# Plate 3
+autocor3 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="effluent" & shifted_data$m_plate==3], lag.max=20, plot = FALSE) # autocorrelation function of plate 3
+pautocor3 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="effluent" & shifted_data$m_plate==3], lag.max=20, plot = FALSE) # partial autocorrelation function of plate 3
+
+
+# Combine the autocorrelation coefficients of all plates into one data frame 
+data <- rbind(tibble(Lag=autocor1$lag, value=autocor1$acf, Function="ACF", m_plate=1),
+              tibble(Lag=pautocor1$lag, value=pautocor1$acf, Function="Partial ACF", m_plate=1),
+              tibble(Lag=autocor2$lag, value=autocor2$acf, Function="ACF", m_plate=2),
+              tibble(Lag=pautocor2$lag, value=pautocor2$acf, Function="Partial ACF", m_plate=2),
+              tibble(Lag=autocor3$lag, value=autocor3$acf, Function="ACF", m_plate=3),
+              tibble(Lag=pautocor3$lag, value=pautocor3$acf, Function="Partial ACF", m_plate=3)) %>%
+  group_by(m_plate, Function) %>%
+  mutate(CI = qnorm((1 + 0.95)/2)/sqrt(80)) %>% # calculate 95% confidence interval per plate
+  ungroup
+
+# Plot the autocorrelation and partial autocorrelations of each plate 
+p <- ggplot(data, aes(x=Lag, y=value)) +
+  geom_bar(stat="identity", width=.1) +
+  geom_hline(yintercept = 0) +
+  geom_hline(aes(yintercept = -CI), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept = CI), color="blue", linetype="dashed") +
+  labs(x="Lag", y="",
+       title="Autocorrelation of shift and blank corrected samples",
+       subtitle="effluent") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+      text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+      plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+      plot.subtitle = element_text(hjust = 0.5, size = 15)) +
+  facet_wrap(~Function + m_plate, scales="fixed")
+
+p
+```
+
+```{r Save figure 26, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig26.png.png",
+  plot = p, 
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+```{r TTR Autocorrelation fit serum, fig.width=11.2, fig.height=4.02*2, fig.fullwidth=TRUE, fig.cap=c("**Figure 27. (Partial) Autocorrelation function of shift and blank corrected fluorescence signals of each technical replicate of dust.** The x-axis displays the lag between the residuals and the y-axis the value of the autocorrelation function (acf). The blue dashed line is the 95% confidence interval (CI). The autocorrelation with lag zero always equals 1, because this represents the autocorrelation between each residual and itself. ")}
+
+## SERUM
+
+# Fit autocorrelation
+# Plate 1
+autocor1 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="serum" & shifted_data$m_plate==1], lag.max=20, plot = FALSE) # autocorrelation function of plate 1
+pautocor1 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="serum" & shifted_data$m_plate==1], lag.max=20, plot = FALSE) # partial autocorrelation function of plate 1
+
+# Plate 2
+autocor2 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="serum" & shifted_data$m_plate==2], lag.max=20, plot = FALSE) # autocorrelation function of plate 2
+pautocor2 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="serum" & shifted_data$m_plate==2], lag.max=20, plot = FALSE) #  partial autocorrelation function of plate 2
+
+# Plate 3
+autocor3 <- acf(x=shifted_data$corrected.value[shifted_data$m_sample=="serum" & shifted_data$m_plate==3], lag.max=20, plot = FALSE) # autocorrelation function of plate 3
+pautocor3 <- pacf(x=shifted_data$corrected.value[shifted_data$m_sample=="serum" & shifted_data$m_plate==3], lag.max=20, plot = FALSE) # partial autocorrelation function of plate 3
+
+
+# Combine the autocorrelation coefficients of all plates into one data frame 
+data <- rbind(tibble(Lag=autocor1$lag, value=autocor1$acf, Function="ACF", m_plate=1),
+              tibble(Lag=pautocor1$lag, value=pautocor1$acf, Function="Partial ACF", m_plate=1),
+              tibble(Lag=autocor2$lag, value=autocor2$acf, Function="ACF", m_plate=2),
+              tibble(Lag=pautocor2$lag, value=pautocor2$acf, Function="Partial ACF", m_plate=2),
+              tibble(Lag=autocor3$lag, value=autocor3$acf, Function="ACF", m_plate=3),
+              tibble(Lag=pautocor3$lag, value=pautocor3$acf, Function="Partial ACF", m_plate=3)) %>%
+  group_by(m_plate, Function) %>%
+  mutate(CI = qnorm((1 + 0.95)/2)/sqrt(80)) %>% # calculate 95% confidence interval per plate
+  ungroup
+
+# Plot the autocorrelation and partial autocorrelations of each plate 
+p <- ggplot(data, aes(x=Lag, y=value)) +
+  geom_bar(stat="identity", width=.1) +
+  geom_hline(yintercept = 0) +
+  geom_hline(aes(yintercept = -CI), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept = CI), color="blue", linetype="dashed") +
+  labs(x="Lag", y="",
+       title="Autocorrelation of shift and blank corrected samples",
+       subtitle="serum") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+      text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+      plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+      plot.subtitle = element_text(hjust = 0.5, size = 15)) +
+  facet_wrap(~Function + m_plate, scales="fixed")
+
+p
+```
+
+```{r Save figure 27, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig27.png.png",
+  plot = p, 
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02*2
+)
+```
+
+<p>&nbsp;</p>
+
+(Partial) Autocorrelation functions were produced for the fluorescence signals of the the technical replicates after subtracting the fitted procedure blank and correcting for the shift in chromatograms. For all environmental samples, a large spike at lag 1 that decreases after a few lags is visible. This suggests that there is an autoregressive term present in the data (Fig. 25-27). When looking at the partial autocorrelations, a significant correlation is seen at the first lag. This is followed by autocorrelations that are not significant, which implies that the autoregressive term is of the first order.  
+
+### Correlation between values and lagged values
+
+```{r TTR Correlation lagged and non-lagged, fig.width=11.2, fig.height=4.02*3, fig.fullwidth=TRUE, fig.cap=c("**Figure 28. Correlation between non-lagged and lag-1 values of each technical replicate in dust, effluent and serum.** The lag-1 values are displayed on the x-axis and the non-lagged values on the y-axis.")}
+
+## DUST
+
+data <- shifted_data %>% 
+  filter(line=="Fitted PB - Sample") %>%
+  select(m_sample, m_plate, m_fraction, corrected.value) %>%
+  group_by(m_sample, m_plate) %>%
+  mutate(lag1.corrected.value=lag(corrected.value, n=1)) %>%
+  ungroup()
+
+p1 <- ggplot(data[data$m_sample=="dust",], aes(x=lag1.corrected.value, y=corrected.value)) +
+  geom_point() +
+  labs(x="Lag-1 FITC-T4 bound to TTR\n(after blank subtraction)", 
+       y="FITC-T4 bound to TTR\n(after blank subtraction)",
+       title="Dust") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+      text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+      plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+      plot.subtitle = element_text(hjust = 0.5, size = 15)) +
+  facet_wrap(~m_plate, ncol=3)
+
+
+## EFFLUENT
+
+p2 <- ggplot(data[data$m_sample=="effluent",], aes(x=lag1.corrected.value, y=corrected.value)) +
+  geom_point() +
+  labs(x="Lag-1 FITC-T4 bound to TTR\n(after blank subtraction)", 
+       y="FITC-T4 bound to TTR\n(after blank subtraction)",
+       title="Effluent") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+      text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+      plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+      plot.subtitle = element_text(hjust = 0.5, size = 15)) +
+  facet_wrap(~m_plate, ncol=3)
+
+
+## SERUM
+
+p3 <- ggplot(data[data$m_sample=="serum",], aes(x=lag1.corrected.value, y=corrected.value)) +
+  geom_point() +
+  labs(x="Lag-1 FITC-T4 bound to TTR\n(after blank subtraction)", 
+       y="FITC-T4 bound to TTR\n(after blank subtraction)",
+       title="Serum") +
+  theme_bw() +
+  theme(panel.spacing.x = unit(4, "mm"), panel.spacing.y = unit(4, "mm"),
+      text = element_text(size = 15), plot.margin = unit(c(5,0,5,0), "mm"),
+      plot.title = element_text(hjust = 0.5, size = 17.5, margin=unit(c(0,0,0,0), "mm")), 
+      plot.subtitle = element_text(hjust = 0.5, size = 15)) +
+  facet_wrap(~m_plate, ncol=3)
+
+p <- annotate_figure(ggarrange(p1, p2, p3, nrow=3, labels=c("A", "B", "C")), top = text_grob("Lag-0 vs. Lag-1", face = "bold", size = 14, hjust=0.65))
+
+p
+```
+
+```{r Save figure 28}
+  ggsave(
+    "figures/rmarkdown/fig28A.png.png",
+    plot = p1, 
+    scale = 1,
+    dpi = 300,
+    type="cairo",
+    width=11.2,
+    height=4.02
+  )
+
+  ggsave(
+    "figures/rmarkdown/fig28B.png.png",
+    plot = p2, 
+    scale = 1,
+    dpi = 300,
+    type="cairo",
+    width=11.2,
+    height=4.02
+  )
+  
+    ggsave(
+    "figures/rmarkdown/fig28C.png.png",
+    plot = p3, 
+    scale = 1,
+    dpi = 300,
+    type="cairo",
+    width=11.2,
+    height=4.02
+  )
+```
+
+<p>&nbsp;</p>
+
+Figure 28 shows that there is a clear positive correlation between the non-lagged values and the lag-1 values.
+
+***
+
+## Chromatograms
+
+The shift and fitted blank corrected chromatograms are plotted with +/- 1, 2 and 3 standard deviation threshold lines. Certain fractions in serum were spiked with compounds that are known to compete with T4 for TTR. These fractions are higlighted with a red dotted line.  
+
+##### Dust
+
+```{r TTR Corrected chromatograms Dust 2, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 29. TTR-binding bioassay response in each technical replicate of dust.** The fractions (or time) are displayed on the x-axis and the procedure blank corrected fluorescence signal on the y-axis.")}
+
+## DUST
+# Plot sample values after blank subtraction
+p <- shifted_data %>%
+  filter(line=="Fitted PB - Sample", m_sample=="dust") %>%
+  mutate(residuals=raw-fitted) %>%
+  group_by(m_sample, m_plate) %>%
+  # Calculate the standard deviation
+  mutate(`+/- SD`=sd(residuals)) %>%
+  mutate(`+/- 2SD`= 2*`+/- SD`, `+/- 3SD`= 3*`+/- SD`) %>% # calculate 2 and 3 standard deviation thresholds
+  gather(key="type", value="SD", `+/- SD`, `+/- 2SD`, `+/- 3SD`) %>%
+  mutate(type=factor(type, levels = c("+/- SD", "+/- 2SD", "+/- 3SD"))) %>%
+  ggplot(aes(x=m_fraction, y=corrected.value)) +
+  geom_point() +
+  geom_line() + 
+  geom_line(aes(x=m_fraction, y=SD, col=as.factor(type)), # add positive standard deviation lines to the plot
+          alpha=1, size=0.35) +
+  geom_line(aes(x=m_fraction, y=-SD, col=as.factor(type)), # add negative standard deviation lines to the plot
+          alpha=1, size=0.35) +
+  xlab("Fraction") +
+  ylab("FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(title="TTR binding assay response", 
+       subtitle = "in dust",
+       color="") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 15, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 12.5),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  facet_wrap(~ as.factor(m_plate), ncol=3) +
+  viridis::scale_color_viridis(discrete = TRUE, option = "D")
+
+p
+```
+
+```{r Save figure 29, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig29.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+##### Effluent
+
+```{r TTR Blank subtraction Effluent 2, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 30. TTR-binding bioassay response in each technical replicate of effluent.** The fractions (or time) are displayed on the x-axis and the procedure blank corrected fluorescence signal on the y-axis.")}
+
+## EFFLUENT
+# Plot sample values after blank subtraction
+p <- shifted_data %>%
+  filter(line=="Fitted PB - Sample", m_sample=="effluent") %>%
+  mutate(residuals=raw-fitted) %>%
+  group_by(m_sample, m_plate) %>%
+  mutate(`+/- SD`=sd(residuals)) %>%
+  mutate(`+/- 2SD`= 2*`+/- SD`, `+/- 3SD`= 3*`+/- SD`) %>%
+  gather(key="type", value="SD", `+/- SD`, `+/- 2SD`, `+/- 3SD`) %>%
+  mutate(type=factor(type, levels = c("+/- SD", "+/- 2SD", "+/- 3SD"))) %>%
+  ggplot(aes(x=m_fraction, y=corrected.value)) +
+  geom_point() +
+  geom_line() + 
+  geom_line(aes(x=m_fraction, y=SD, col=as.factor(type)),
+          alpha=1, size=0.35) +
+  geom_line(aes(x=m_fraction, y=-SD, col=as.factor(type)),
+          alpha=1, size=0.35) +
+  xlab("Fraction") +
+  ylab("FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(title="TTR binding assay response", 
+       subtitle = "in effluent",
+       color="") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 15, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 12.5),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  facet_wrap(~ as.factor(m_plate), ncol=3) +
+  viridis::scale_color_viridis(discrete = TRUE, option = "D")
+
+p
+```
+
+```{r Save figure 30, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig30.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+##### Serum
+
+```{r TTR Blank subtraction Serum 2, fig.width=11.2, fig.height=4.02, fig.fullwidth=TRUE, fig.cap=c("**Figure 31. TTR-binding bioassay response in each technical replicate of serum.** The fractions (or time) are displayed on the x-axis and the procedure blank corrected fluorescence signal on the y-axis.")}
+
+## SERUM
+# Set up a data frame with the compounds and the spiked wells/fractions
+serum_spikes <- tibble(compound=c("TBBPA", "2,4,6-TBP", "5-OH-BDE47", "6-OH-BDE47", "6-OH-BDE99", "4-OH-CB107", "4-OH-CB187", "4-OH-CB187"),
+                       m_well=c("E12", "E4", "F6", "F7", "G3", "F5", "G5", "G6"),
+                       m_fraction=c(50, 42, 57, 56, 61, 58, 63, 64)) %>%
+  left_join(p_data %>%
+              filter(m_plate != 0, m_sample=="serum") %>%
+               select(m_fraction, m_row, m_col, m_plate, m_sample))
+
+knitr::kable(head(serum_spikes, 8))
+
+# Plot sample values after blank subtraction
+p <- shifted_data %>%
+  filter(line=="Fitted PB - Sample", m_sample=="serum") %>%
+  mutate(residuals=raw-fitted) %>%
+  group_by(m_sample, m_plate) %>%
+  mutate(`+/- SD`=sd(residuals)) %>%
+  mutate(`+/- 2SD`= 2*`+/- SD`, `+/- 3SD`= 3*`+/- SD`) %>%
+  gather(key="type", value="SD", `+/- SD`, `+/- 2SD`, `+/- 3SD`) %>%
+  mutate(type=factor(type, levels = c("+/- SD", "+/- 2SD", "+/- 3SD"))) %>%
+  ggplot(aes(x=m_fraction, y=corrected.value)) +
+  geom_point() +
+  geom_line() + 
+  geom_line(aes(x=m_fraction, y=SD, col=as.factor(type)),
+          alpha=1, size=0.35) +
+  geom_line(aes(x=m_fraction, y=-SD, col=as.factor(type)),
+          alpha=1, size=0.35) +
+  # Add red dotted lines at spiked fractions
+  geom_vline(data=serum_spikes, aes(xintercept=m_fraction), linetype="dotted", color="red",
+            alpha=0.6, show.legend = FALSE) + 
+  xlab("Fraction") +
+  ylab("FITC-T4 bound to TTR\n(after blank subtraction)") +
+  labs(title="TTR binding assay response", 
+       subtitle = "in serum",
+       color="") +
+  theme_bw() +
+  theme(text = element_text(size = 12.5), plot.margin = unit(c(5,0,5,0), "mm"), 
+        plot.title = element_text(hjust = 0.5, size = 15, margin=unit(c(0,0,0,0), "mm")), 
+        plot.subtitle = element_text(hjust = 0.5, size = 12.5), legend.title = element_text(hjust = 0.5, size = 12.5),
+        legend.position = "bottom", legend.direction = "horizontal") +
+  facet_wrap(~ as.factor(m_plate), ncol=3) +
+  viridis::scale_color_viridis(discrete = TRUE, option = "D")
+
+p
+```
+
+```{r Save figure 31, echo=FALSE}
+ggsave(
+  "figures/rmarkdown/fig31.png",
+  plot = p,
+  scale = 1,
+  dpi = 300,
+  type="cairo",
+  width=11.2,
+  height=4.02
+)
+```
+
+<p>&nbsp;</p>
+
+The identification of bioactive peaks will be done by scoring the peaks based on a fixed threshold of signal, e.g. +/- 3 standard deviations, and the reproducibility of the peaks. 
