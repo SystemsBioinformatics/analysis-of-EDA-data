@@ -1,5 +1,5 @@
 # EDA Bioassay Analaysis Configuration File
-# In this file, parameters and options are defined.
+# In this file, parameters and options are defined
 
 pb_fm_file: testdata/Antibiotics assay/20201216_FractioMate_131601_Blank.txt
 pb_p_file: testdata/Antibiotics assay/20201217_Procedure blank fractionated_Resazurin.txt
