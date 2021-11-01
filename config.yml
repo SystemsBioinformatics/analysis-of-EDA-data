@@ -1,0 +1,20 @@
+# EDA Bioassay Analaysis Configuration File
+# In this file, parameters and options are defined.
+
+pb_fm_file: testdata/Antibiotics assay/20201216_FractioMate_131601_Blank.txt
+pb_p_file: testdata/Antibiotics assay/20201217_Procedure blank fractionated_Resazurin.txt
+directory_name: Antibiotics Assay - Effluent
+ylab: Cell viability E. coli FhuAT
+report_title: NULL
+design_file: NULL
+sample_fm_file: NULL
+sample_p_file: NULL
+sample_plate_id: NULL
+sd_threshold: 3
+plate_threshold: 2
+normalization: FALSE
+neg_control: NULL
+pos_control: NULL
+iteration_time: 60
+iteration1: 1
+iteration2: 4

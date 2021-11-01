@@ -22,12 +22,12 @@ extract_plate_effect <- function(plate_effect_data){
   return(plate_effect)
 }
 
-# Store time effect values in a data frame
-extract_time_effect <- function(time_effect_data){
-  # Extract values of the second smooth term (time effect) and store them in a data frame
-  time_effect <- tibble(m_fraction = time_effect_data$x, value = time_effect_data$fit)
+# Store fractionation effect values in a data frame
+extract_fractionation_effect <- function(fractionation_effect_data){
+  # Extract values of the second smooth term (fractionation effect) and store them in a data frame
+  fractionation_effect <- tibble(m_fraction = fractionation_effect_data$x, value = fractionation_effect_data$fit)
 
-  return(time_effect)
+  return(fractionation_effect)
 }
 
 
@@ -60,11 +60,11 @@ calculate_effect <- function(fit){
   # extract all effects
   effect <- plot.gam(fit, n = n, n2 = n2, select = 0)
 
-  # store plate and time effect in separate data frames
+  # store plate and fractionation effect in separate data frames
   plate_effect <- extract_plate_effect(effect[[1]])
-  time_effect <- extract_time_effect(effect[[2]])
+  fractionation_effect <- extract_fractionation_effect(effect[[2]])
 
-  return(list(plate_effect = plate_effect, time_effect = time_effect))
+  return(list(plate_effect = plate_effect, fractionation_effect = fractionation_effect))
 }
 
 
