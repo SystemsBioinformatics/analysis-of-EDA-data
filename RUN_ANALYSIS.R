@@ -6,7 +6,7 @@
 source("scripts/main_function.R") 
 
 # Import and parse parameters
-config = yaml::yaml.load_file("config_PFAS3.yml")
+config = yaml::yaml.load_file("config.yml")
 
 # Run analysis
 eda_bioassay_analysis(pb_fm_file = config$pb_fm_file, 

@@ -14,6 +14,7 @@ you simply run the 'run_analysis.R' script and the workflow analysis of bioassay
 are saved in a result directory that is created in the working directory. The results comprise a HTML report with the results, such as figures and tables,
 the individual figures as PNG-files, an Excel file with the fitted procedure blank data and their corresponding details, such as the residuals and the SD,
 and if hits are selected, an Excel file with the identified hits and their corresponding details.
+Inspecting the R console for possible warnings or error messages is recommended during the run.
 
 In the configuration file (config.yml), the parameters 'pb_fm_file', 'pb_p_file', 'directory_name' and 'ylab' must be provided. If these parameters are provided, the analysis
 will only visualize and model the procedure blank, and return its results. The remaining parameters are optional.

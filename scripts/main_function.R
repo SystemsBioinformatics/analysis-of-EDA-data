@@ -116,13 +116,13 @@ eda_bioassay_analysis <- function(pb_fm_file, pb_p_file, directory_name, ylab, r
     
     # Check plate threshold input 
     if(!is.null(plate_threshold) && plate_threshold > length(sample_fm_file)){
-      message('argument "plate_threshold" too large. using default plate_threshold = 2.')
+      message('argument "plate_threshold" too large. using plate_threshold = 2.')
       plate_threshold <- 2
     } else if (!is.null(plate_threshold) && !is.numeric(plate_threshold)){
-      message('numeric value expected for argument "plate_threshold". using default plate_threshold = 2.')
+      message('numeric value expected for argument "plate_threshold". using plate_threshold = 2.')
       plate_threshold <- 2
     } else if (!is.null(plate_threshold) && plate_threshold < 1){
-      message('argument "plate_threshold" too small. using default plate_threshold = 2.')
+      message('argument "plate_threshold" too small. using plate_threshold = 2.')
       plate_threshold <- 2
     }
       

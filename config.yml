@@ -11,7 +11,7 @@ sample_fm_file: NULL
 sample_p_file: NULL
 sample_plate_id: NULL
 sd_threshold: 3
-plate_threshold: 2
+plate_threshold: NULL
 normalization: FALSE
 neg_control: NULL
 pos_control: NULL
