@@ -196,7 +196,7 @@ if ("m_iter" %in% colnames(params$pb_p_data) && max(as.numeric(params$pb_p_data$
 
 ## Visual exploration of data
 
-To get an initial understanding of the data, the observed fluorescence signal is plotted per well on the plate and per fraction in order of fractionation. By visualizing the data, biases that often occur in biological screening data, such as plate effects, can be easily detected.
+To get an initial understanding of the data, the observed fluorescence signal is plotted per well on the plate and per fraction in order of fractionation. By visualizing the data, biases that often occur in biological screening data, such as plate position effects, can be easily detected.
 The number of fractions in this assay run is `r nrow(fraction_data_pb)`. 
 
 ```{r Heatmap of raw/pre-processed data, fig.cap = "**Figure 1. Heatmap showing the observed bioassay signal of the procedure blank in each well of the 96-well plate.** The color of the wells indicate  the fluorescence signal.", fig.width = 7.5, fig.height = 5}
@@ -215,7 +215,7 @@ rm(fig)
 ```{r Lineplot of raw/pre-processed data, fig.cap = "**Figure 2. The observed bioassay signal per fraction.** The fraction numbers are displayed on the x-axis in order of fractionation and the bioassay signal is displayed on the y-axis.", fig.width = 5, fig.height = 5, out.width = "75%", out.height = "75%"}
 
 # Plot the fluorescence signal against fraction number to
-# determine if a fractionation-dependent bias is present
+# determine if a fraction number-dependent bias is present
 fig <- scatterplot(fraction_data_pb, x = "m_fraction", y = "raw_value", title = "Bioassay response", subtitle = "of procedure blank", xlab = "Fraction", ylab = params$ylab)
 fig
 
@@ -226,9 +226,9 @@ rm(fig)
 
 ## Bias reduction
 
-To reduce bias present in the data, a curve is fitted through the data using a generalized additive model, or GAM. GAM captures relationships between independent and dependent variables in smooth functions. To predict the dependent variable, the smooth functions are estimated and then added up. Here, a GAM will be built using smooth functions for both plate and fractionation effect, as extracts are fractionated over the plate in a row- or column-wise snake-like pattern. For each effect, a smooth curve will be fitted and added up to obtain a smoother procedure blank or reference chromatogram. 
-The GAM structure can be described as: $$E(assay~signal) = s(row, column) + s(fractionation)$$
-$s(row, column)$ is the plate effect smooth term and $s(fractionation)$ is the fractionation effect smooth term.
+To reduce bias present in the data, a curve is fitted through the data using a generalized additive model, or GAM. GAM captures relationships between independent and dependent variables in smooth functions. To predict the dependent variable, the smooth functions are estimated and then added up. Here, a GAM will be built using smooth functions for both plate position and fraction number effect, as extracts are fractionated over the plate in a row- or column-wise snake-like pattern. For each effect, a smooth curve will be fitted and added up to obtain a smoother procedure blank or reference chromatogram. 
+The GAM structure can be described as: $$E(assay~signal) = s(row, column) + s(fraction number)$$
+$s(row, column)$ is the plate position effect smooth term and $s(fraction number)$ is the fraction number effect smooth term.
 
 ### GAM results
 
@@ -243,7 +243,7 @@ gam_summary <- summary(GAMres$fit)
 gam_summary
 ```
 
-The first part of the summary of the results describes the model that is fitted. "Family" means that a Gaussian or normal distribution of the errors is assumed. The "Link" of "identity" tells us that the model does not transform the predictions. In the next section, the parametric terms (i.e., linear terms) of the model are described. However, no linear terms were added to the model, hence, only the intercept is mentioned in this section. The following section covers the smooth terms. For smooths, coefficients are not printed because each smooth function has one coefficient for each basis dimension (`k`). The basis dimension is partially responsible for the flexibility of the fit. Instead of coefficients, the effective degrees of freedom (edf) are reported here. The edf value represents the complexity of the smooth, i.e. an edf of 1 means a linear relationship, while higher edfs describe more flexible curves. The `p-value` explains the overall significance of the smooth. A non-significant `p-value` specifies a zero effect of the indicated smooth function. Inspecting the results, `p-value` = `r gam_summary$s.table[1,4]`  is reported for the first smoothing spline, which models the plate effect, and `p-value` = `r gam_summary$s.table[2,4]` is reported for the second spline, which describes the fractionation effect. 
+The first part of the summary of the results describes the model that is fitted. "Family" means that a Gaussian or normal distribution of the errors is assumed. The "Link" of "identity" tells us that the model does not transform the predictions. In the next section, the parametric terms (i.e., linear terms) of the model are described. However, no linear terms were added to the model, hence, only the intercept is mentioned in this section. The following section covers the smooth terms. For smooths, coefficients are not printed because each smooth function has one coefficient for each basis dimension (`k`). The basis dimension is partially responsible for the flexibility of the fit. Instead of coefficients, the effective degrees of freedom (edf) are reported here. The edf value represents the complexity of the smooth, i.e. an edf of 1 means a linear relationship, while higher edfs describe more flexible curves. The `p-value` explains the overall significance of the smooth. A non-significant `p-value` specifies a zero effect of the indicated smooth function. Inspecting the results, `p-value` = `r gam_summary$s.table[1,4]`  is reported for the first smoothing spline, which models the plate position effect, and `p-value` = `r gam_summary$s.table[2,4]` is reported for the second spline, which describes the fraction number effect. 
 
 
 #### Basis dimension check
@@ -257,7 +257,7 @@ k_idx <- k.check(GAMres$fit)
 knitr::kable(k_idx, caption = "**Table 1. Basis dimension (k) results.**")
 ```
 
-Inspecting the basis dimension (`k`) results, a `k-index` = `r  k_idx[5]` with  `p-value` = `r k_idx[7]` is reported for the first smooth term, i.e. the plate effect (Table 1). For the second smooth term, the fractionation effect, `k-index` = `r k_idx[6]` and `p-value` = `r k_idx[8]` are reported. A `k-index` estimate close to 1 or higher than 1 with a high `p-value` means that the basis dimension (`k`) used is of sufficient size. This suggests that the fit is stable and that the model represents the data well.
+Inspecting the basis dimension (`k`) results, a `k-index` = `r  k_idx[5]` with  `p-value` = `r k_idx[7]` is reported for the first smooth term, i.e. the plate position effect (Table 1). For the second smooth term, the fraction number effect, `k-index` = `r k_idx[6]` and `p-value` = `r k_idx[8]` are reported. A `k-index` estimate close to 1 or higher than 1 with a high `p-value` means that the basis dimension (`k`) used is of sufficient size. This suggests that the fit is stable and that the model represents the data well.
 
 ### Model assessment
 
@@ -282,7 +282,7 @@ save_plot(fig, file.path(result_directory, "Figure 3"), width = 10, height = 9)
 rm(fig)
 ```
 
-In case, the residuals are also plotted against the independent variables (plate and fraction numbers) to see if there might be a pattern present. The residuals should be randomly distributed over the plate and over the fractions.
+In case, the residuals are also plotted against the independent variables (plate position and fraction numbers) to see if there might be a pattern present. The residuals should be randomly distributed over the plate and over the fractions.
 
 ```{r Heatmap residual vs. independent variable 1, fig.cap = "**Figure 4. Heatmap of the distribution of residuals over the 96-well plate.**", fig.width = 7.5, fig.height = 5}
 
@@ -312,23 +312,23 @@ rm(fig)
 
 ### Single smooth effects
 
-To determine the effect of each smooth function individually, plots of the individual fractionation effect and plate effect are plotted here. 
+To determine the effect of each smooth function individually, plots of the individual fraction number effect and plate position effect are plotted here. 
 
-```{r Determine and plot individual smooth effects, fig.cap = "**Figure 6. The individual effects of the component smooth functions that make up the model. A.** Heatmap of the plate effect (s(row, column)). The color of the wells represent the magnitude of the effect. **B.** Lineplot of the fractionation effect (s(fractionation)). The fraction numbers are displayed on the x-axis in order of fractionation and the magnitude of the effect is displayed on the y-axis.", fig.width = 10, fig.height = 5}
+```{r Determine and plot individual smooth effects, fig.cap = "**Figure 6. The individual effects of the component smooth functions that make up the model. A.** Heatmap of the plate position effect (s(row, column)). The color of the wells represent the magnitude of the effect. **B.** Lineplot of the fraction number effect (s(fraction number)). The fraction numbers are displayed on the x-axis in order of fractionation and the magnitude of the effect is displayed on the y-axis.", fig.width = 10, fig.height = 5}
 # Here, the effect of each smooth term is extracted from the GAM object
 # and plotted to assess the individual effects
 
 # Calculate effect of the spatial bias smooth function
 effect <- calculate_effect(GAMres$fit)
 
-p1 <- heatmap(effect$plate_effect, "value", "m_well", title = "Plate effect", ylab = "Effect")
+p1 <- heatmap(effect$plate_effect, "value", "m_well", title = "Plate position effect", ylab = "Effect")
 
-# Calculate effect of the fractionation effect smooth function
-effect$fractionation_effect <- effect$fractionation_effect %>%
+# Calculate effect of the fraction number effect smooth function
+effect$fn_effect <- effect$fn_effect %>%
   inner_join(nd %>%
-               select(m_fraction, m_well)) # add well labels to the fractionation effect data frame
+               select(m_fraction, m_well)) # add well labels to the fraction number effect data frame
 
-p2 <- scatterplot(effect$fractionation_effect, "m_fraction", "value", title = "Fractionation effect", ylab = "Effect", xlab = "Fraction")
+p2 <- scatterplot(effect$fn_effect, "m_fraction", "value", title = "Fraction number effect", ylab = "Effect", xlab = "Fraction")
 
 # Combine effects into a single plot
 fig <- annotate_figure(ggarrange(p1, p2, ncol=2, labels = c("A","B")), 
@@ -449,9 +449,9 @@ writexl::write_xlsx(nd, file.path(result_directory, "procedure_blank_results.xls
 
 `r if(!is.null(params$sample_fm_data)){"## Hit selection\\n"}`
 
-`r if(!is.null(params$sample_fm_data) & normalization){"To determine whether plate and fractionation effects that are present in the procedure blank data are also present in the sample or replicate data, the bioassay response is visualized in plate format and per fraction in fractionation order. The control-based normalized values are plotted here."}`
+`r if(!is.null(params$sample_fm_data) & normalization){"To determine whether plate position and fraction number effects that are present in the procedure blank data are also present in the sample or replicate data, the bioassay response is visualized in plate format and per fraction in fractionation order. The control-based normalized values are plotted here."}`
 
-`r if(!is.null(params$sample_fm_data) & !normalization){"To determine whether plate and fractionation effects that are present in the procedure blank data are also present in the sample or replicate data, the bioassay response is visualized in plate format and per fraction in fractionation order. The raw/pre-processed (non-normalized) values are plotted here."}`
+`r if(!is.null(params$sample_fm_data) & !normalization){"To determine whether plate position and fraction number effects that are present in the procedure blank data are also present in the sample or replicate data, the bioassay response is visualized in plate format and per fraction in fractionation order. The raw/pre-processed (non-normalized) values are plotted here."}`
 
 <p>&nbsp;</p>
 
