@@ -25,7 +25,8 @@ extract_plate_effect <- function(plate_effect_data){
 # Store fraction number effect values in a data frame
 extract_fn_effect <- function(fn_effect_data){
   # Extract values of the second smooth term (fraction number effect) and store them in a data frame
-  fn_effect <- tibble(m_fraction = fn_effect_data$x, value = fn_effect_data$fit)
+  fn_effect <- tibble(m_fraction = fn_effect_data$x, value = fn_effect_data$fit, upper = time_effect_data$fit + time_effect_data$se,
+                      lower = time_effect_data$fit - time_effect_data$se)
 
   return(fn_effect)
 }

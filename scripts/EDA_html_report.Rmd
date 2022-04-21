@@ -314,7 +314,7 @@ rm(fig)
 
 To determine the effect of each smooth function individually, plots of the individual fraction number effect and plate position effect are plotted here. 
 
-```{r Determine and plot individual smooth effects, fig.cap = "**Figure 6. The individual effects of the component smooth functions that make up the model. A.** Heatmap of the plate position effect (s(row, column)). The color of the wells represent the magnitude of the effect. **B.** Lineplot of the fraction number effect (s(fraction number)). The fraction numbers are displayed on the x-axis in order of fractionation and the magnitude of the effect is displayed on the y-axis.", fig.width = 10, fig.height = 5}
+```{r Determine and plot individual smooth effects, fig.cap = "**Figure 6. The individual effects of the component smooth functions that make up the model. A.** Heatmap of the plate position effect (s(row, column)). The color of the wells represent the magnitude of the effect. **B.** Lineplot of the fraction number effect (s(fraction number)). The fraction numbers are displayed on the x-axis in order of fractionation and the magnitude of the effect is displayed on the y-axis.The lower and upper dashed lines in B represent the confidence interval (± 2 standard error (SE))", fig.width = 10, fig.height = 5}
 # Here, the effect of each smooth term is extracted from the GAM object
 # and plotted to assess the individual effects
 
@@ -328,7 +328,11 @@ effect$fn_effect <- effect$fn_effect %>%
   inner_join(nd %>%
                select(m_fraction, m_well)) # add well labels to the fraction number effect data frame
 
-p2 <- scatterplot(effect$fn_effect, "m_fraction", "value", title = "Fraction number effect", ylab = "Effect", xlab = "Fraction")
+p2 <- scatterplot(effect$fn_effect, "m_fraction", "value", title = "Fraction number effect", ylab = "Effect", xlab = "Fraction") + 
+  geom_ribbon(aes(ymin = upper, ymax = lower), 
+              alpha=0.1, 
+              linetype="dashed",
+              color="grey")
 
 # Combine effects into a single plot
 fig <- annotate_figure(ggarrange(p1, p2, ncol=2, labels = c("A","B")), 
