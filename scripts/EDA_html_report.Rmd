@@ -329,7 +329,7 @@ effect$fn_effect <- effect$fn_effect %>%
                select(m_fraction, m_well)) # add well labels to the fraction number effect data frame
 
 p2 <- scatterplot(effect$fn_effect, "m_fraction", "value", title = "Fraction number effect", ylab = "Effect", xlab = "Fraction") + 
-  geom_ribbon(aes(ymin = upper, ymax = lower), 
+  geom_ribbon(aes(ymin = upper, ymax = lower), # add confidence interval
               alpha=0.1, 
               linetype="dashed",
               color="grey")
